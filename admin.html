@@ -22,6 +22,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // ===== Wallet4Wealth Live — Firebase config (eventorg) =====
 window.W4W_CONFIG = {
@@ -156,6 +157,11 @@ window.W4W_CONFIG = {
           <h2 class="font-bold text-navy truncate">Questions · <span id="qSeminarName" class="text-slate-500 font-semibold">select a seminar</span></h2>
           <span id="qCount" class="text-xs text-slate-500 shrink-0"></span>
         </div>
+        <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
+          <button id="bulkBtn" class="bg-navy hover:bg-navy-700 text-white rounded-md px-3 py-1.5 font-semibold">⬆ Bulk upload (Excel)</button>
+          <button id="sampleBtn" class="bg-slate-100 hover:bg-slate-200 rounded-md px-3 py-1.5 font-semibold">⬇ Sample file</button>
+          <input id="bulkFile" type="file" accept=".xlsx,.xls,.csv" class="hidden">
+        </div>
         <div id="questionList" class="space-y-2"></div>
       </div>
 
@@ -274,6 +280,22 @@ window.W4W_CONFIG = {
       <button id="pToggleOpen" class="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 font-semibold">Lock</button>
       <button id="pNext" class="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2">▶</button>
       <button id="pExit" class="bg-red-500/80 hover:bg-red-500 rounded-lg px-3 py-2 font-semibold">Exit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk upload preview -->
+<div id="bulkModal" class="hidden fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4">
+  <div class="w-full max-w-3xl bg-white text-slate-800 rounded-2xl shadow-2xl p-5 max-h-[90vh] flex flex-col fade-in">
+    <div class="flex items-center justify-between mb-1">
+      <div class="font-bold text-navy text-lg">Bulk upload preview</div>
+      <button id="bulkClose" class="text-slate-400 hover:text-slate-700 text-xl px-2">✕</button>
+    </div>
+    <div id="bulkSummary" class="text-sm text-slate-500 mb-3"></div>
+    <div id="bulkList" class="flex-1 overflow-y-auto space-y-2 pr-1"></div>
+    <div class="flex gap-2 mt-4">
+      <button id="bulkCancel" class="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200 py-2.5 font-semibold">Cancel</button>
+      <button id="bulkImport" class="flex-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white py-2.5 font-bold">Import</button>
     </div>
   </div>
 </div>
@@ -847,6 +869,151 @@ function openKeyPicker(q) {
   $('keyPicker').classList.remove('hidden');
 }
 $('kpCancel').onclick = () => $('keyPicker').classList.add('hidden');
+
+// =====================================================================
+//  Bulk upload — multiple-choice questions from Excel / CSV
+//  Columns: Question | Option A … Option F | Correct (A–F, 1–6 or option text; blank = poll)
+// =====================================================================
+const LETTERS = 'ABCDEFGH';
+const SAMPLE_ROWS = [
+  ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Option E', 'Option F', 'Correct'],
+  ['What does SIP stand for?', 'Systematic Investment Plan', 'Simple Interest Plan', 'Secure Investment Policy', 'Savings Investment Plan', '', '', 'A'],
+  ['Which regulator governs mutual funds in India?', 'RBI', 'SEBI', 'IRDAI', 'PFRDA', '', '', 'B'],
+  ['What is the lock-in period of an ELSS fund?', '1 year', '3 years', '5 years', 'No lock-in', '', '', 'B'],
+  ['NAV stands for?', 'Net Asset Value', 'New Account Value', 'Net Annual Value', 'Nominal Asset Value', '', '', 'Net Asset Value'],
+  ['Which fund type generally carries the lowest risk?', 'Small cap fund', 'Liquid fund', 'Sectoral fund', 'Mid cap fund', '', '', '2'],
+  ['Compounding works best with…', 'A long time horizon', 'Frequent switching', 'Short-term trading', '', '', '', 'A'],
+  ['Which topic should our next seminar cover? (poll — no correct answer)', 'Tax planning', 'Retirement', 'Insurance', 'Market outlook', '', '', '']
+];
+
+$('sampleBtn').onclick = () => {
+  if (typeof XLSX === 'undefined') return toast('Excel library not loaded — check internet');
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(SAMPLE_ROWS);
+  ws['!cols'] = [{ wch: 55 }, { wch: 26 }, { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+  XLSX.utils.book_append_sheet(wb, ws, 'Questions');
+  const help = XLSX.utils.aoa_to_sheet([
+    ['How to fill'],
+    ['1. One question per row in the "Questions" sheet. Keep the header row.'],
+    ['2. Fill 2 to 6 options (Option A … Option F). Leave unused option cells empty.'],
+    ['3. Correct: A–F, or 1–6, or the exact option text. Leave blank for an opinion poll (not scored).'],
+    ['4. Question max 200 characters, each option max 80 characters.'],
+    ['5. In admin, select the seminar first, then Bulk upload (Excel).']
+  ]);
+  help['!cols'] = [{ wch: 95 }];
+  XLSX.utils.book_append_sheet(wb, help, 'Instructions');
+  XLSX.writeFile(wb, 'W4W_Questions_Sample.xlsx');
+};
+
+$('bulkBtn').onclick = () => {
+  if (!S.selectedSeminarId) return toast('Select a seminar first');
+  if (typeof XLSX === 'undefined') return toast('Excel library not loaded — check internet');
+  $('bulkFile').value = ''; $('bulkFile').click();
+};
+
+$('bulkFile').onchange = async e => {
+  const file = e.target.files[0]; if (!file) return;
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const name = wb.SheetNames.find(n => /question/i.test(n)) || wb.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', raw: false });
+    S.bulkItems = parseQuestionSheet(rows);
+    openBulkPreview(file.name);
+  } catch (err) { console.error(err); toast('Could not read file: ' + err.message); }
+};
+
+function parseQuestionSheet(rows) {
+  rows = rows.map(r => (r || []).map(c => (c == null ? '' : String(c).trim())));
+  const first = rows.findIndex(r => r.some(Boolean));
+  if (first < 0) return [];
+  const H = rows[first].map(c => c.toLowerCase());
+  let qCol = 0, cCol = 7, optCols = [1, 2, 3, 4, 5, 6], start = first;
+  if (H.some(c => /question/.test(c))) {              // header row present → map by names
+    start = first + 1; optCols = []; cCol = -1;
+    H.forEach((c, i) => {
+      if (/question/.test(c)) qCol = i;
+      else if (/correct|answer|^ans$|key/.test(c)) cCol = i;
+      else if (/option|opt\b|choice|^[a-h]$/.test(c)) optCols.push(i);
+    });
+  }
+  const out = [];
+  for (let i = start; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r.some(Boolean)) continue;
+    const text = (r[qCol] || '').replace(/\s+/g, ' ');
+    const labels = optCols.map(j => (r[j] || '').replace(/\s+/g, ' ')).filter(Boolean);
+    const errs = [];
+    if (!text) errs.push('question missing');
+    else if (text.length > 200) errs.push('question over 200 characters');
+    if (labels.length < 2) errs.push('needs at least 2 options');
+    if (labels.length > 8) errs.push('max 8 options');
+    if (labels.some(l => l.length > 80)) errs.push('an option is over 80 characters');
+    const ids = new Set();
+    const options = labels.slice(0, 8).map(label => { let id; do { id = newId(); } while (ids.has(id)); ids.add(id); return { id, label }; });
+    let correct = null;
+    const raw = cCol >= 0 ? (r[cCol] || '') : '';
+    if (raw) {
+      const up = raw.toUpperCase().replace(/^OPTION\s*/, '').trim();
+      let idx = -1;
+      if (/^[A-H]$/.test(up)) idx = LETTERS.indexOf(up);
+      else if (/^[1-8]$/.test(up)) idx = +up - 1;
+      else idx = labels.findIndex(l => l.toLowerCase() === raw.toLowerCase());
+      if (idx < 0 || idx >= options.length) errs.push(`correct answer "${raw}" doesn't match an option`);
+      else correct = options[idx].id;
+    }
+    out.push({ row: i + 1, text, options, correct, errs });
+  }
+  return out;
+}
+
+function openBulkPreview(fileName) {
+  const items = S.bulkItems || [];
+  const ok = items.filter(x => !x.errs.length), bad = items.length - ok.length, scored = ok.filter(x => x.correct).length;
+  $('bulkSummary').innerHTML = `<b>${esc(fileName)}</b> → <b>${esc(seminarTitle(S.selectedSeminarId))}</b><br>
+    ${ok.length} ready (${scored} scored, ${ok.length - scored} polls)${bad ? ` · <span class="text-red-600 font-semibold">${bad} with errors will be skipped</span>` : ''}`;
+  $('bulkList').innerHTML = items.length ? items.map(x => `
+    <div class="rounded-xl border ${x.errs.length ? 'border-red-200 bg-red-50' : 'border-slate-200'} p-3 text-sm">
+      <div class="flex gap-2">
+        <span class="text-xs text-slate-400 shrink-0 mt-0.5">Row ${x.row}</span>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-navy break-words">${esc(x.text || '—')}</div>
+          <div class="mt-1 flex flex-wrap gap-1.5">${x.options.map((o, i) =>
+            `<span class="rounded-md px-2 py-0.5 text-xs ${o.id === x.correct ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-100 text-slate-600'}">${LETTERS[i]}. ${esc(o.label)}${o.id === x.correct ? ' ✓' : ''}</span>`).join('')}</div>
+          ${x.errs.length ? `<div class="text-xs text-red-600 font-semibold mt-1">⚠ ${esc(x.errs.join('; '))}</div>`
+            : !x.correct ? '<div class="text-xs text-slate-400 mt-1">No correct answer → opinion poll (not scored)</div>' : ''}
+        </div>
+      </div>
+    </div>`).join('') : '<p class="text-sm text-slate-400">No questions found in the file.</p>';
+  $('bulkImport').disabled = !ok.length;
+  $('bulkImport').textContent = ok.length ? `Import ${ok.length} question${ok.length === 1 ? '' : 's'}` : 'Nothing to import';
+  $('bulkModal').classList.remove('hidden');
+}
+const closeBulk = () => $('bulkModal').classList.add('hidden');
+$('bulkClose').onclick = closeBulk; $('bulkCancel').onclick = closeBulk;
+
+$('bulkImport').onclick = async () => {
+  const sid = S.selectedSeminarId, items = (S.bulkItems || []).filter(x => !x.errs.length);
+  if (!sid || !items.length) return;
+  $('bulkImport').disabled = true; $('bulkImport').textContent = 'Importing…';
+  try {
+    const col = mRef.collection('questions'), qs = seminarQuestions(sid), answers = {};
+    let order = qs.length ? Math.max(...qs.map(q => q.order || 0)) + 1 : 0;
+    for (let i = 0; i < items.length; i += 400) {
+      const batch = db.batch();
+      items.slice(i, i + 400).forEach(x => {
+        const ref = col.doc();
+        batch.set(ref, { seminarId: sid, text: x.text, type: 'mcq', options: x.options, order: order++, createdAt: FV.serverTimestamp() });
+        if (x.correct) answers[ref.id] = x.correct;
+      });
+      await batch.commit();
+    }
+    if (Object.keys(answers).length) await answersRef.set(answers, { merge: true });
+    closeBulk(); toast(`${items.length} questions imported ✅`);
+  } catch (err) {
+    console.error(err); toast('Import failed: ' + err.message);
+    $('bulkImport').disabled = false; $('bulkImport').textContent = 'Retry import';
+  }
+};
 $('toggleReveal').onclick = revealFlow;
 
 function step(dir) {
