@@ -57,9 +57,24 @@ window.W4W_CONFIG = {
 <body class="bg-slate-100 text-slate-800 min-h-screen">
 
 <!-- Loading -->
-<div id="loadingView" class="min-h-screen flex items-center justify-center">
+<div id="loadingView" class="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
   <div class="flex gap-2"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+  <div class="text-sm font-semibold" style="color:#0B1F3A">Connecting to Wallet4Wealth Live…</div>
+  <div id="bootErr" style="display:none;max-width:480px;background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA;border-radius:12px;padding:12px 14px;font-size:13px;text-align:left;word-break:break-word"></div>
+  <button id="bootRetry" onclick="location.reload()" style="display:none;background:#0B1F3A;color:#fff;border-radius:10px;padding:10px 18px;font-weight:700">Retry</button>
 </div>
+<script>
+  // Show any startup error on screen instead of a blank page
+  window.__bootFail = function (msg) {
+    var b = document.getElementById('bootErr'), r = document.getElementById('bootRetry'), lv = document.getElementById('loadingView');
+    if (!b) return;
+    if (lv) { lv.classList.remove('hidden'); lv.style.display = 'flex'; }
+    b.style.display = 'block'; r.style.display = 'inline-block';
+    b.innerHTML = '<b>Could not start.</b><br>' + String(msg).replace(/[<>&]/g, '');
+  };
+  window.addEventListener('error', function (e) { if (!window.__booted) window.__bootFail(e.message || 'Script error'); });
+  window.addEventListener('unhandledrejection', function (e) { if (!window.__booted) window.__bootFail((e.reason && (e.reason.code || e.reason.message)) || 'Unknown error'); });
+</script>
 
 <!-- Join -->
 <div id="joinView" class="hidden min-h-screen flex flex-col bg-gradient-to-br from-navy-900 via-navy-800 to-navy-600">
@@ -119,6 +134,10 @@ window.W4W_CONFIG = {
 // =====================================================================
 //  Setup
 // =====================================================================
+if (typeof firebase === 'undefined') {
+  window.__bootFail('Firebase library did not load. Check your internet connection (or try mobile data instead of office Wi-Fi), then tap Retry.');
+  throw new Error('firebase-missing');
+}
 const CFG = window.W4W_CONFIG;
 const app = firebase.initializeApp(CFG.firebase, 'w4wParticipant');
 const auth = app.auth();
@@ -140,8 +159,11 @@ const S = {
   joined: false, mode: '', stageSig: '', selection: null, submitting: false, unsub: {}
 };
 
+// show('loading' | 'join' | 'app') — exactly one screen visible
 function show(view) {
-  ['loadingView', 'joinView', 'appView'].forEach(v => $(v).classList.toggle('hidden', v !== view));
+  const id = view.endsWith('View') ? view : view + 'View';
+  if (id !== 'loadingView') window.__booted = true;
+  ['loadingView', 'joinView', 'appView'].forEach(v => { $(v).classList.toggle('hidden', v !== id); $(v).style.display = ''; });
 }
 function toast(msg, ms = 2500) {
   const t = $('toast'); t.textContent = msg; t.classList.remove('hidden');
@@ -157,10 +179,23 @@ window.addEventListener('offline', () => $('offline').classList.remove('hidden')
 // =====================================================================
 //  Auth + Join
 // =====================================================================
+if (location.protocol === 'file:') {
+  show('join'); $('joinErr').textContent = 'Please open this page from its https:// link (e.g. https://finbbs.github.io/eventlive/), not as a file.';
+}
 auth.onAuthStateChanged(async user => {
   if (!user) {
     try { await auth.signInAnonymously(); }
-    catch (e) { console.error(e); prefillJoin(); $('joinErr').textContent = 'Could not connect. Check your internet and refresh.'; show('join'); }
+    catch (e) {
+      console.error(e); prefillJoin();
+      const c = e.code || '';
+      $('joinErr').textContent =
+        (c === 'auth/admin-restricted-operation' || c === 'auth/operation-not-allowed') ? 'Setup issue: turn ON "Anonymous" sign-in in Firebase → Authentication → Sign-in method.'
+        : c === 'auth/unauthorized-domain' ? 'Setup issue: add this website in Firebase → Authentication → Settings → Authorized domains.'
+        : c === 'auth/operation-not-supported-in-this-environment' ? 'Please open this page from its https:// link, not as a file.'
+        : c === 'auth/network-request-failed' ? 'No internet connection. Check your network and refresh.'
+        : 'Could not connect (' + (c || e.message) + '). Please refresh.';
+      show('join');
+    }
     return;
   }
   S.uid = user.uid;
@@ -171,6 +206,14 @@ auth.onAuthStateChanged(async user => {
     else show('join');
   } catch (e) { show('join'); }
 });
+
+// Watchdog: never sit on the loading screen forever
+setTimeout(() => {
+  if (!window.__booted) {
+    prefillJoin(); show('join');
+    $('joinErr').textContent = 'Connection is slow. If joining fails, check your internet and refresh.';
+  }
+}, 12000);
 
 function prefillJoin() {
   $('jName').value = LS.get('w4w_name') || '';
@@ -189,7 +232,10 @@ $('joinForm').addEventListener('submit', async e => {
     LS.set('w4w_name', name); LS.set('w4w_code', code);
     S.name = name; enterApp();
   } catch (err) {
-    $('joinErr').textContent = err.code === 'permission-denied' ? 'Invalid access code. Please check with the host.' : 'Could not join: ' + err.message;
+    console.error(err);
+    $('joinErr').textContent = err.code === 'permission-denied'
+      ? 'Invalid access code — or the host has not opened the admin page yet. Please check with the host.'
+      : 'Could not join: ' + (err.code || err.message);
   } finally {
     $('joinBtn').disabled = false; $('joinBtn').textContent = 'Join session';
   }
