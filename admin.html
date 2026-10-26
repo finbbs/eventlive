@@ -201,7 +201,7 @@ window.W4W_CONFIG = {
             <button id="toggleShow" class="switch" aria-label="Show results"></button>
           </div>
           <div id="revealRow" class="hidden flex items-center justify-between gap-3">
-            <div><div class="font-semibold text-sm">Reveal correct answer</div><div class="text-xs text-slate-500">Highlights it for everyone (also shows results)</div></div>
+            <div><div class="font-semibold text-sm">Reveal correct answer</div><div id="revealHint" class="text-xs text-slate-500">Highlights it for everyone (also shows results)</div></div>
             <button id="toggleReveal" class="switch" aria-label="Reveal correct answer"></button>
           </div>
         </div>
@@ -269,11 +269,22 @@ window.W4W_CONFIG = {
       <span class="hidden md:inline text-slate-400 mr-2">← → navigate · R results · L lock · A answer · W winners</span>
       <button id="pPrev" class="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2">◀</button>
       <button id="pBoard" class="bg-gold/90 hover:bg-gold text-navy rounded-lg px-3 py-2 font-bold">🏆 Winners</button>
+      <button id="pReveal" class="hidden bg-emerald-500 hover:bg-emerald-400 text-navy rounded-lg px-3 py-2 font-bold">✅ Reveal answer</button>
       <button id="pToggleShow" class="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 font-semibold">Results</button>
       <button id="pToggleOpen" class="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 font-semibold">Lock</button>
       <button id="pNext" class="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2">▶</button>
       <button id="pExit" class="bg-red-500/80 hover:bg-red-500 rounded-lg px-3 py-2 font-semibold">Exit</button>
     </div>
+  </div>
+</div>
+
+<!-- Pick-the-correct-answer dialog (used when revealing a question with no answer marked) -->
+<div id="keyPicker" class="hidden fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-white text-slate-800 rounded-2xl shadow-2xl p-5 fade-in">
+    <div class="font-bold text-navy text-lg">Which option is correct?</div>
+    <div id="kpQuestion" class="text-sm text-slate-500 mt-1 mb-4"></div>
+    <div id="kpOptions" class="space-y-2"></div>
+    <button id="kpCancel" class="mt-4 w-full rounded-lg bg-slate-100 hover:bg-slate-200 py-2 text-sm font-semibold">Cancel</button>
   </div>
 </div>
 
@@ -776,9 +787,10 @@ function renderLive() {
   const open = m.votingStatus === 'OPEN', show = m.resultVisibility === 'SHOW';
   $('toggleOpen').classList.toggle('on', open);
   $('toggleShow').classList.toggle('on', show);
-  const scored = !!(q && q.type === 'mcq' && S.answers[q.id]);
-  $('revealRow').classList.toggle('hidden', !scored);
+  const isMcq = !!(q && q.type === 'mcq'), scored = isMcq && !!S.answers[q.id];
+  $('revealRow').classList.toggle('hidden', !isMcq);
   $('toggleReveal').classList.toggle('on', scored && !!m.revealAnswer);
+  $('revealHint').textContent = scored ? 'Shows ✅/❌ on every phone (also shows results)' : 'No answer marked yet — you will pick it';
   const badge = $('liveBadge');
   if (!q) { badge.textContent = 'IDLE'; badge.className = 'text-xs font-bold rounded-full px-2.5 py-1 bg-slate-100 text-slate-500'; }
   else if (open) { badge.textContent = '● VOTING OPEN'; badge.className = 'text-xs font-bold rounded-full px-2.5 py-1 bg-emerald-100 text-emerald-700'; }
@@ -812,7 +824,30 @@ async function setReveal(on) {
   if (on) { upd.resultVisibility = 'SHOW'; upd.votingStatus = 'LOCKED'; }   // revealing closes voting
   await mRef.update(upd);
 }
-$('toggleReveal').onclick = () => setReveal(!S.meeting.revealAnswer);
+// One entry point for every "reveal" button/key
+function revealFlow() {
+  const q = activeQuestion();
+  if (!q) return toast('No live question');
+  if (q.type !== 'mcq') return toast('Only multiple-choice questions have a correct answer');
+  if (S.meeting.revealAnswer) return setReveal(false);
+  if (S.answers[q.id]) return setReveal(true);
+  openKeyPicker(q);
+}
+function openKeyPicker(q) {
+  $('kpQuestion').textContent = q.text;
+  $('kpOptions').innerHTML = (q.options || []).map(o =>
+    `<button data-oid="${esc(o.id)}" class="w-full text-left rounded-xl border-2 border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 px-4 py-3 font-semibold text-navy">${esc(o.label)}</button>`).join('');
+  $('kpOptions').querySelectorAll('button').forEach(b => b.onclick = async () => {
+    $('keyPicker').classList.add('hidden');
+    S.answers = { ...S.answers, [q.id]: b.dataset.oid };          // local first so reveal passes instantly
+    await answersRef.set({ [q.id]: b.dataset.oid }, { merge: true });
+    await setReveal(true);
+    toast('Answer saved — question is now scored 🏆');
+  });
+  $('keyPicker').classList.remove('hidden');
+}
+$('kpCancel').onclick = () => $('keyPicker').classList.add('hidden');
+$('toggleReveal').onclick = revealFlow;
 
 function step(dir) {
   const cur = activeQuestion();
@@ -952,6 +987,9 @@ function renderPresent() {
   if (!S.presenting) return;
   const m = S.meeting, q = activeQuestion();
   $('pBoard').textContent = S.presentBoard ? '✕ Close winners' : '🏆 Winners';
+  const showReveal = !S.presentBoard && !!q && q.type === 'mcq';
+  $('pReveal').classList.toggle('hidden', !showReveal);
+  $('pReveal').textContent = m.revealAnswer ? 'Hide answer' : '✅ Reveal answer';
   const st = $('pStatus');
 
   if (S.presentBoard) {
@@ -1012,6 +1050,7 @@ $('pPrev').onclick = () => step(-1);
 $('pNext').onclick = () => step(1);
 $('pToggleShow').onclick = () => activeQuestion() && setShow(S.meeting.resultVisibility !== 'SHOW');
 $('pToggleOpen').onclick = () => activeQuestion() && setOpen(S.meeting.votingStatus !== 'OPEN');
+$('pReveal').onclick = revealFlow;
 $('pBoard').onclick = () => {
   S.presentBoard = !S.presentBoard;
   if (S.presentBoard && S.meeting.activeSeminarId && S.selectedSeminarId !== S.meeting.activeSeminarId) {
@@ -1025,7 +1064,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'ArrowLeft') step(-1);
   else if (e.key.toLowerCase() === 'r') $('pToggleShow').click();
   else if (e.key.toLowerCase() === 'l') $('pToggleOpen').click();
-  else if (e.key.toLowerCase() === 'a') setReveal(!S.meeting.revealAnswer);
+  else if (e.key.toLowerCase() === 'a') revealFlow();
   else if (e.key.toLowerCase() === 'w') $('pBoard').click();
   else if (e.key === 'Escape' && !document.fullscreenElement) exitPresent();
 });
