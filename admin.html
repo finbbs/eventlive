@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W4W Live – Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      colors: {
+        navy: { DEFAULT: '#0B1F3A', 900: '#071528', 800: '#0B1F3A', 700: '#12305A', 600: '#1B3F73', 500: '#28528F' },
+        gold: { DEFAULT: '#D4A017', 400: '#E4B83A', 600: '#B88A0F' }
+      },
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+    } }
+  };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+// ===== Wallet4Wealth Live — Firebase config (eventorg) =====
+window.W4W_CONFIG = {
+  firebase: {
+    apiKey: "AIzaSyCgE4LLMBMIDBalzdxkdBrU5ysFQNW6Y_o",
+    authDomain: "eventorg-d20b9.firebaseapp.com",
+    projectId: "eventorg-d20b9",
+    storageBucket: "eventorg-d20b9.firebasestorage.app",
+    messagingSenderId: "552242799477",
+    appId: "1:552242799477:web:c0ac1454a44dcaf6ef293c"
+  },
+  meetingId: "w4w-live",
+  defaultAccessCode: "W4W2026",
+  orgName: "Wallet4Wealth"
+};
+</script>
+<style>
+  body { font-family: Inter, system-ui, sans-serif; }
+  .bar-fill { transition: width .7s cubic-bezier(.22,1,.36,1); }
+  .fade-in { animation: fadeIn .35s ease both; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .pop { animation: pop .3s ease; }
+  @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.12); } 100% { transform: scale(1); } }
+  .switch { position: relative; width: 52px; height: 28px; border-radius: 999px; background: #CBD5E1; transition: background .2s; flex-shrink: 0; }
+  .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s; }
+  .switch.on { background: #10B981; }
+  .switch.on::after { transform: translateX(24px); }
+  .word { display: inline-block; margin: 4px 10px; line-height: 1.1; font-weight: 700; animation: fadeIn .4s ease both; }
+  #qr img, #qr canvas { border-radius: 8px; }
+  ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 8px; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+
+<!-- ================= LOGIN ================= -->
+<div id="loginView" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-navy-900 via-navy-800 to-navy-600">
+  <div class="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-8 fade-in">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-11 h-11 rounded-xl bg-navy flex items-center justify-center text-gold font-extrabold text-sm">W4W</div>
+      <div>
+        <div class="font-bold text-navy text-lg leading-tight">Wallet4Wealth Live</div>
+        <div class="text-xs text-slate-500">Organizer console</div>
+      </div>
+    </div>
+    <form id="loginForm" class="space-y-4">
+      <div>
+        <label class="text-xs font-semibold text-slate-600">Admin email</label>
+        <input id="loginEmail" type="email" required autocomplete="username" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-600">Password</label>
+        <input id="loginPass" type="password" required autocomplete="current-password" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      </div>
+      <p id="loginErr" class="text-sm text-red-600 min-h-[1.25rem]"></p>
+      <button id="loginBtn" class="w-full bg-navy hover:bg-navy-700 text-white font-semibold rounded-lg py-2.5 transition">Sign in</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="appView" class="hidden">
+  <header class="bg-navy text-white sticky top-0 z-30 shadow">
+    <div class="max-w-[1500px] mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
+      <div class="flex items-center gap-3 mr-auto">
+        <div class="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-gold font-extrabold text-sm">W4W</div>
+        <div>
+          <div class="font-bold leading-tight">Live Polls · Admin</div>
+          <div id="hdrSeminar" class="text-xs text-slate-300">No seminar live</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 bg-white/10 rounded-full px-3 py-1.5 text-sm">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span><b id="hdrJoined">0</b> joined</span>
+      </div>
+      <button id="presentBtn" class="bg-gold hover:bg-gold-400 text-navy font-bold rounded-lg px-4 py-2 text-sm transition">▶ Present</button>
+      <button id="logoutBtn" class="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 text-sm transition">Sign out</button>
+    </div>
+  </header>
+
+  <main class="max-w-[1500px] mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- Seminars + settings -->
+    <aside class="lg:col-span-3 space-y-4">
+      <section class="bg-white rounded-2xl shadow-sm p-4">
+        <h2 class="font-bold text-navy mb-3">Seminars</h2>
+        <div id="seminarList" class="space-y-2 mb-3"></div>
+        <form id="seminarForm" class="flex gap-2">
+          <input id="seminarTitle" placeholder="e.g. Seminar 1: Market Outlook" maxlength="80" class="flex-1 min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <button class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 text-sm font-semibold">Add</button>
+        </form>
+      </section>
+
+      <section class="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <h2 class="font-bold text-navy">Session settings</h2>
+        <div>
+          <label class="text-xs font-semibold text-slate-600">Participant access code</label>
+          <div class="flex gap-2 mt-1">
+            <input id="accessCode" maxlength="20" class="flex-1 min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <button id="saveCodeBtn" class="bg-navy hover:bg-navy-700 text-white rounded-lg px-3 text-sm font-semibold">Save</button>
+          </div>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-600">Participant link</label>
+          <div class="flex gap-2 mt-1">
+            <input id="joinUrl" readonly class="flex-1 min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <button id="copyUrlBtn" class="bg-slate-200 hover:bg-slate-300 rounded-lg px-3 text-sm font-semibold">Copy</button>
+          </div>
+        </div>
+        <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+          <div class="text-sm"><b id="rosterCount">0</b> <span class="text-slate-500">participants joined</span></div>
+          <button id="clearRosterBtn" class="text-xs text-red-600 hover:underline font-semibold">Clear roster</button>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-2xl shadow-sm p-4">
+        <div class="flex items-center justify-between mb-1 gap-2">
+          <h2 class="font-bold text-navy">🏆 Leaderboard</h2>
+          <div class="flex gap-1.5 text-xs">
+            <button id="lbCsvBtn" class="bg-slate-100 hover:bg-slate-200 rounded-md px-2 py-1 font-semibold">CSV</button>
+            <button id="lbShowBtn" class="bg-gold hover:bg-gold-400 text-navy rounded-md px-2 py-1 font-bold">Show on screen</button>
+          </div>
+        </div>
+        <div id="lbMeta" class="text-xs text-slate-500 mb-3"></div>
+        <div id="lbList" class="space-y-1.5 max-h-96 overflow-y-auto"></div>
+      </section>
+    </aside>
+
+    <!-- Questions -->
+    <section class="lg:col-span-5 space-y-4">
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <div class="flex items-center justify-between mb-3 gap-2">
+          <h2 class="font-bold text-navy truncate">Questions · <span id="qSeminarName" class="text-slate-500 font-semibold">select a seminar</span></h2>
+          <span id="qCount" class="text-xs text-slate-500 shrink-0"></span>
+        </div>
+        <div id="questionList" class="space-y-2"></div>
+      </div>
+
+      <div id="builderCard" class="bg-white rounded-2xl shadow-sm p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 id="builderTitle" class="font-bold text-navy">New question</h2>
+          <button id="cancelEditBtn" class="hidden text-xs text-slate-500 hover:underline">Cancel edit</button>
+        </div>
+        <form id="builderForm" class="space-y-3">
+          <div class="grid grid-cols-3 gap-2" id="typePicker">
+            <button type="button" data-type="mcq" class="type-btn rounded-lg border px-2 py-2 text-xs font-semibold">☑ Multiple choice</button>
+            <button type="button" data-type="rating" class="type-btn rounded-lg border px-2 py-2 text-xs font-semibold">★ Rating 1–5</button>
+            <button type="button" data-type="wordcloud" class="type-btn rounded-lg border px-2 py-2 text-xs font-semibold">☁ Word cloud</button>
+          </div>
+          <textarea id="qText" rows="2" maxlength="200" required placeholder="Type your question…" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+          <div id="optionsWrap" class="space-y-2">
+            <div id="optionInputs" class="space-y-2"></div>
+            <button type="button" id="addOptBtn" class="text-sm text-emerald-700 font-semibold hover:underline">+ Add option</button>
+          </div>
+          <p id="typeHint" class="text-xs text-slate-500"></p>
+          <button id="saveQBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition">Add question</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Live control -->
+    <section class="lg:col-span-4">
+      <div class="bg-white rounded-2xl shadow-sm p-4 lg:sticky lg:top-20 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-bold text-navy">Live control</h2>
+          <span id="liveBadge" class="text-xs font-bold rounded-full px-2.5 py-1 bg-slate-100 text-slate-500">IDLE</span>
+        </div>
+
+        <div id="liveQuestion" class="rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm text-slate-500">No question is live. Press <b>Go live</b> on a question.</div>
+
+        <div class="space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div><div class="font-semibold text-sm">Accepting responses</div><div class="text-xs text-slate-500">Lock / unlock voting</div></div>
+            <button id="toggleOpen" class="switch" aria-label="Accepting responses"></button>
+          </div>
+          <div class="flex items-center justify-between gap-3">
+            <div><div class="font-semibold text-sm">Show results</div><div class="text-xs text-slate-500">Reveal to participants &amp; stage</div></div>
+            <button id="toggleShow" class="switch" aria-label="Show results"></button>
+          </div>
+          <div id="revealRow" class="hidden flex items-center justify-between gap-3">
+            <div><div class="font-semibold text-sm">Reveal correct answer</div><div class="text-xs text-slate-500">Highlights it for everyone (also shows results)</div></div>
+            <button id="toggleReveal" class="switch" aria-label="Reveal correct answer"></button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <button id="prevBtn" class="rounded-lg bg-slate-100 hover:bg-slate-200 py-2 text-sm font-semibold">◀ Prev</button>
+          <button id="endBtn" class="rounded-lg bg-red-50 hover:bg-red-100 text-red-700 py-2 text-sm font-semibold">■ End</button>
+          <button id="nextBtn" class="rounded-lg bg-slate-100 hover:bg-slate-200 py-2 text-sm font-semibold">Next ▶</button>
+        </div>
+
+        <div class="rounded-xl bg-navy text-white p-3">
+          <div class="flex items-end justify-between">
+            <div class="text-xs text-slate-300">Responses</div>
+            <div class="text-xs text-slate-300" id="votePct">0%</div>
+          </div>
+          <div class="text-2xl font-extrabold"><span id="voteCount">0</span> <span class="text-base font-semibold text-slate-300">/ <span id="joinCount">0</span> participants voted</span></div>
+          <div class="h-1.5 bg-white/15 rounded-full mt-2 overflow-hidden"><div id="voteProg" class="h-full bg-emerald-400 bar-fill" style="width:0%"></div></div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-sm font-semibold">Live results <span class="text-xs text-slate-400 font-normal">(always visible to you)</span></div>
+            <button id="resetLiveBtn" class="text-xs text-red-600 hover:underline font-semibold">Reset votes</button>
+          </div>
+          <div id="adminResults" class="min-h-[80px]"></div>
+        </div>
+
+        <details class="text-sm">
+          <summary class="cursor-pointer font-semibold text-slate-600">Latest responses</summary>
+          <div id="recentList" class="mt-2 max-h-48 overflow-y-auto space-y-1 text-xs"></div>
+        </details>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ================= PRESENTATION ================= -->
+<div id="presentView" class="hidden fixed inset-0 z-50 bg-gradient-to-br from-navy-900 via-navy-800 to-navy-700 text-white flex flex-col">
+  <div class="flex items-start justify-between p-6 md:p-10 gap-6">
+    <div>
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-gold font-extrabold text-sm">W4W</div>
+        <div class="text-slate-300 font-semibold" id="pSeminar"></div>
+      </div>
+      <div id="pStatus" class="mt-3 inline-block text-xs font-bold tracking-wider rounded-full px-3 py-1 bg-white/10"></div>
+    </div>
+    <div class="flex items-center gap-4 bg-white/5 rounded-2xl p-3">
+      <div class="text-right">
+        <div class="text-xs text-slate-300">Join at</div>
+        <div id="pUrl" class="font-semibold text-sm max-w-[260px] break-all"></div>
+        <div class="text-xs text-slate-300 mt-1">Code <span id="pCode" class="font-mono text-gold font-bold text-lg"></span></div>
+      </div>
+      <div id="qr" class="bg-white p-1.5 rounded-lg"></div>
+    </div>
+  </div>
+
+  <div class="flex-1 flex flex-col px-6 md:px-16 pb-4 overflow-hidden">
+    <h1 id="pQuestion" class="text-3xl md:text-5xl font-extrabold leading-tight mb-8"></h1>
+    <div id="pResults" class="flex-1 overflow-hidden"></div>
+  </div>
+
+  <div class="flex items-center justify-between px-6 md:px-10 py-4 bg-black/20">
+    <div class="text-lg"><span id="pVotes" class="font-extrabold text-3xl text-emerald-400">0</span> <span class="text-slate-300">/ <span id="pJoined">0</span> participants voted</span></div>
+    <div class="flex items-center gap-2 text-sm">
+      <span class="hidden md:inline text-slate-400 mr-2">← → navigate · R results · L lock · A answer · W winners</span>
+      <button id="pPrev" class="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2">◀</button>
+      <button id="pBoard" class="bg-gold/90 hover:bg-gold text-navy rounded-lg px-3 py-2 font-bold">🏆 Winners</button>
+      <button id="pToggleShow" class="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 font-semibold">Results</button>
+      <button id="pToggleOpen" class="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 font-semibold">Lock</button>
+      <button id="pNext" class="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2">▶</button>
+      <button id="pExit" class="bg-red-500/80 hover:bg-red-500 rounded-lg px-3 py-2 font-semibold">Exit</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] hidden bg-navy text-white text-sm px-4 py-2.5 rounded-xl shadow-lg"></div>
+
+<script>
+// =====================================================================
+//  Setup
+// =====================================================================
+const CFG = window.W4W_CONFIG;
+// Named app => admin login is stored separately from the participant session
+const app = firebase.initializeApp(CFG.firebase, 'w4wAdmin');
+const auth = app.auth();
+const db = app.firestore();
+const FV = firebase.firestore.FieldValue;
+const mRef = db.collection('meetings').doc(CFG.meetingId);
+const resultsRef = mRef.collection('live').doc('results');
+const configRef = mRef.collection('private').doc('config');
+const answersRef = mRef.collection('private').doc('answers');   // { [questionId]: correctOptionId } — admin only
+const votesCol = qid => mRef.collection('questions').doc(qid).collection('votes');
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const TYPE_LABEL = { mcq: 'Multiple choice', rating: 'Rating', wordcloud: 'Word cloud' };
+const TYPE_ICON = { mcq: '☑', rating: '★', wordcloud: '☁' };
+const PALETTE = ['#10B981', '#D4A017', '#38BDF8', '#F472B6', '#A78BFA', '#FB923C', '#34D399', '#FACC15'];
+
+const S = {
+  meeting: {}, seminars: [], questions: [], votes: [], votesQid: undefined,
+  participants: 0, selectedSeminarId: null, editingId: null, builderType: 'mcq',
+  accessCode: '', presenting: false, unsub: {},
+  answers: {}, builderCorrect: null, voteCache: {}, board: { sid: null, total: 0, rows: [] }, presentBoard: false
+};
+
+function toast(msg, ms = 2200) {
+  const t = $('toast'); t.textContent = msg; t.classList.remove('hidden');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), ms);
+}
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const newId = () => 'o' + Math.random().toString(36).slice(2, 8);
+
+// =====================================================================
+//  Auth
+// =====================================================================
+$('loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('loginErr').textContent = ''; $('loginBtn').disabled = true; $('loginBtn').textContent = 'Signing in…';
+  try {
+    await auth.signInWithEmailAndPassword($('loginEmail').value.trim(), $('loginPass').value);
+  } catch (err) {
+    $('loginErr').textContent = 'Invalid email or password.';
+  } finally {
+    $('loginBtn').disabled = false; $('loginBtn').textContent = 'Sign in';
+  }
+});
+$('logoutBtn').onclick = () => auth.signOut();
+
+auth.onAuthStateChanged(async user => {
+  stopListeners();
+  if (!user || user.isAnonymous) {
+    if (user && user.isAnonymous) await auth.signOut();
+    $('appView').classList.add('hidden'); $('loginView').classList.remove('hidden');
+    return;
+  }
+  try {
+    await bootstrap();
+    $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden');
+    startListeners();
+  } catch (err) {
+    console.error(err);
+    $('loginErr').textContent = 'This account is not authorised as admin.';
+    await auth.signOut();
+  }
+});
+
+async function bootstrap() {
+  const cfgSnap = await configRef.get();            // throws if not admin
+  if (!cfgSnap.exists) await configRef.set({ accessCode: CFG.defaultAccessCode.toUpperCase() });
+  S.accessCode = (cfgSnap.exists && cfgSnap.data().accessCode) || CFG.defaultAccessCode.toUpperCase();
+  $('accessCode').value = S.accessCode;
+  const m = await mRef.get();
+  if (!m.exists) {
+    await mRef.set({
+      title: CFG.orgName + ' Live', activeQuestionId: null, votingStatus: 'LOCKED',
+      resultVisibility: 'HIDE', revealAnswer: false, activeSeminarId: null, activeSeminarTitle: '',
+      stats: { joined: 0, voted: 0 }, updatedAt: FV.serverTimestamp()
+    });
+  }
+  $('joinUrl').value = joinUrl();
+}
+
+function joinUrl() { return new URL('index.html', location.href).href; }
+
+// =====================================================================
+//  Listeners
+// =====================================================================
+function startListeners() {
+  S.unsub.meeting = mRef.onSnapshot(snap => {
+    const prevReveal = !!S.meeting.revealAnswer;
+    S.meeting = snap.data() || {};
+    if (!S.selectedSeminarId && S.meeting.activeSeminarId) S.selectedSeminarId = S.meeting.activeSeminarId;
+    watchVotes(S.meeting.activeQuestionId || null);
+    if (prevReveal !== !!S.meeting.revealAnswer) scheduleResultsWrite();
+    renderAll();
+  }, err => console.error('meeting', err));
+
+  S.unsub.answers = answersRef.onSnapshot(snap => {
+    S.answers = snap.data() || {};
+    renderAll(); scheduleResultsWrite(); refreshBoard();
+  }, err => console.error('answers', err));
+
+  S.unsub.seminars = mRef.collection('seminars').orderBy('createdAt').onSnapshot(snap => {
+    S.seminars = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!S.selectedSeminarId || !S.seminars.some(s => s.id === S.selectedSeminarId)) {
+      S.selectedSeminarId = S.meeting.activeSeminarId || (S.seminars[0] && S.seminars[0].id) || null;
+    }
+    renderSeminars(); renderQuestions();
+  }, err => console.error('seminars', err));
+
+  S.unsub.questions = mRef.collection('questions').orderBy('order').onSnapshot(snap => {
+    S.questions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll(); scheduleResultsWrite(); refreshBoard();
+  }, err => console.error('questions', err));
+
+  S.unsub.participants = mRef.collection('participants').onSnapshot(snap => {
+    S.participants = snap.size;
+    renderCounters(); syncStats();
+  }, err => console.error('participants', err));
+}
+
+function stopListeners() {
+  Object.values(S.unsub).forEach(fn => { try { fn && fn(); } catch (e) {} });
+  S.unsub = {}; S.votesQid = undefined; S.votes = []; S.voteCache = {};
+}
+
+function watchVotes(qid) {
+  if (S.votesQid === qid) return;
+  if (S.unsub.votes) { S.unsub.votes(); delete S.unsub.votes; }
+  if (S.votesQid) S.voteCache[S.votesQid] = S.votes;   // keep final votes of the previous question
+  S.votesQid = qid; S.votes = [];
+  if (!qid) { renderLive(); syncStats(); resultsRef.set({ questionId: null, updatedAt: FV.serverTimestamp() }).catch(() => {}); return; }
+  S.unsub.votes = votesCol(qid).onSnapshot(snap => {
+    S.votes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderLive(); renderPresent(); syncStats(); scheduleResultsWrite(); refreshBoard();
+  }, err => console.error('votes', err));
+}
+
+// Write live counters to meeting doc so participants don't need roster/vote reads
+const syncStats = debounce(() => {
+  const joined = S.participants, voted = S.votesQid ? S.votes.length : 0;
+  const cur = S.meeting.stats || {};
+  if (cur.joined === joined && cur.voted === voted) return;
+  mRef.update({ stats: { joined, voted } }).catch(e => console.error(e));
+}, 600);
+
+// Write aggregated results (participants read only this one doc)
+const scheduleResultsWrite = debounce(() => {
+  const q = activeQuestion();
+  if (!q) return;
+  const correctOptionId = (q.type === 'mcq' && S.meeting.revealAnswer && S.answers[q.id]) || null;
+  resultsRef.set({ ...aggregate(q, S.votes), correctOptionId, updatedAt: FV.serverTimestamp() }).catch(e => console.error(e));
+}, 500);
+
+// =====================================================================
+//  Leaderboard (per seminar, scored multiple-choice questions only)
+//  Rank: most correct answers → then fastest total response time
+// =====================================================================
+async function votesFor(qid) {
+  if (qid === S.votesQid) return S.votes;
+  if (!S.voteCache[qid]) {
+    const snap = await votesCol(qid).get();
+    S.voteCache[qid] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+  return S.voteCache[qid];
+}
+function scoredQuestions(sid) { return seminarQuestions(sid).filter(q => q.type === 'mcq' && S.answers[q.id]); }
+
+let boardToken = 0;
+const refreshBoard = debounce(async () => {
+  const sid = S.selectedSeminarId, token = ++boardToken;
+  if (!sid) { S.board = { sid: null, total: 0, rows: [] }; renderBoard(); return; }
+  const qs = scoredQuestions(sid);
+  const map = {};
+  try {
+    const all = await Promise.all(qs.map(q => votesFor(q.id)));
+    qs.forEach((q, i) => {
+      const launch = q.launchedAt && q.launchedAt.toMillis ? q.launchedAt.toMillis() : null;
+      all[i].forEach(v => {
+        const p = map[v.id] || (map[v.id] = { uid: v.id, name: v.name || 'Anonymous', correct: 0, answered: 0, timeMs: 0 });
+        p.name = v.name || p.name; p.answered++;
+        if (v.optionId === S.answers[q.id]) {
+          p.correct++;
+          const ts = v.ts && v.ts.toMillis ? v.ts.toMillis() : null;
+          p.timeMs += (ts && launch) ? Math.max(0, ts - launch) : 0;
+        }
+      });
+    });
+  } catch (e) { console.error('leaderboard', e); }
+  if (token !== boardToken) return;   // a newer refresh started
+  const rows = Object.values(map).sort((a, b) => b.correct - a.correct || a.timeMs - b.timeMs || a.name.localeCompare(b.name));
+  S.board = { sid, total: qs.length, rows };
+  renderBoard();
+}, 400);
+
+const MEDAL = ['🥇', '🥈', '🥉'];
+const avgSec = r => r.correct ? (r.timeMs / r.correct / 1000).toFixed(1) + 's' : '–';
+
+function renderBoard() {
+  const b = S.board, sid = S.selectedSeminarId;
+  $('lbMeta').textContent = sid
+    ? `${seminarTitle(sid)} · ${b.total} scored question${b.total === 1 ? '' : 's'} · ${b.rows.length} player${b.rows.length === 1 ? '' : 's'}`
+    : 'Select a seminar';
+  const list = $('lbList');
+  if (!sid || !b.total) {
+    list.innerHTML = '<p class="text-sm text-slate-400">Mark a correct answer (✓) on multiple-choice questions to score them.</p>';
+  } else if (!b.rows.length) {
+    list.innerHTML = '<p class="text-sm text-slate-400">No answers yet.</p>';
+  } else {
+    list.innerHTML = b.rows.map((r, i) => `
+      <div class="flex items-center gap-2 rounded-lg px-2 py-1.5 ${i < 3 ? 'bg-amber-50' : ''}">
+        <span class="w-7 text-center font-bold ${i < 3 ? 'text-lg' : 'text-xs text-slate-500'}">${MEDAL[i] || i + 1}</span>
+        <span class="flex-1 min-w-0 truncate text-sm font-semibold text-navy">${esc(r.name)}</span>
+        <span class="text-sm font-extrabold text-emerald-700">${r.correct}/${b.total}</span>
+        <span class="w-12 text-right text-xs text-slate-400" title="Average time per correct answer">${avgSec(r)}</span>
+      </div>`).join('');
+  }
+  if (S.presenting && S.presentBoard) renderPresent();
+}
+
+$('lbCsvBtn').onclick = () => {
+  const b = S.board;
+  if (!b.rows.length) return toast('Nothing to export yet');
+  const q = s => '"' + String(s).replace(/"/g, '""') + '"';
+  const lines = [['Rank', 'Name', 'Correct', 'Scored questions', 'Answered', 'Avg time per correct (s)'].join(',')]
+    .concat(b.rows.map((r, i) => [i + 1, q(r.name), r.correct, b.total, r.answered, r.correct ? (r.timeMs / r.correct / 1000).toFixed(1) : ''].join(',')));
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `W4W_Winners_${(seminarTitle(b.sid) || 'seminar').replace(/[^\w]+/g, '_')}.csv`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('lbShowBtn').onclick = () => { S.presentBoard = true; $('presentBtn').click(); };
+
+// =====================================================================
+//  Helpers
+// =====================================================================
+function activeQuestion() { return S.questions.find(q => q.id === S.meeting.activeQuestionId) || null; }
+function seminarQuestions(sid) { return S.questions.filter(q => q.seminarId === sid).sort((a, b) => (a.order || 0) - (b.order || 0)); }
+function seminarTitle(sid) { const s = S.seminars.find(x => x.id === sid); return s ? s.title : ''; }
+
+function aggregate(q, votes) {
+  const r = { questionId: q.id, type: q.type, total: votes.length, counts: {}, avg: 0, words: [] };
+  if (q.type === 'mcq') {
+    (q.options || []).forEach(o => r.counts[o.id] = 0);
+    votes.forEach(v => { if (v.optionId in r.counts) r.counts[v.optionId]++; });
+  } else if (q.type === 'rating') {
+    let sum = 0, n = 0;
+    for (let i = 1; i <= 5; i++) r.counts[i] = 0;
+    votes.forEach(v => { if (v.rating >= 1 && v.rating <= 5) { r.counts[v.rating]++; sum += v.rating; n++; } });
+    r.avg = n ? Math.round((sum / n) * 10) / 10 : 0;
+  } else {
+    const m = {};
+    votes.forEach(v => {
+      const w = String(v.text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      if (w) m[w] = (m[w] || 0) + 1;
+    });
+    r.words = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 60).map(([w, n]) => ({ w, n }));
+  }
+  return r;
+}
+
+// Keyed, animated bar renderer (updates widths in place so bars glide)
+function paintBars(el, rows, big = false) {
+  const hasKey = rows.some(r => r.correct);
+  const sig = rows.map(r => r.key + (r.correct ? '*' : '')).join('|') + (big ? 'B' : '');
+  const max = Math.max(0, ...rows.map(r => r.count));
+  if (el.dataset.sig !== sig) {
+    el.dataset.sig = sig;
+    el.innerHTML = `<div class="${big ? 'space-y-5' : 'space-y-2.5'}">` + rows.map(r => `
+      <div data-k="${esc(r.key)}" class="${hasKey && !r.correct ? 'opacity-60' : ''}">
+        <div class="flex justify-between items-baseline ${big ? 'text-2xl md:text-3xl mb-2' : 'text-sm mb-1'}">
+          <span class="font-semibold truncate pr-3">${r.correct ? '✅ ' : ''}${esc(r.label)}</span>
+          <span class="shrink-0 font-bold"><span class="cnt">0</span> <span class="pct ${big ? 'text-slate-300' : 'text-slate-400'} font-medium">(0%)</span></span>
+        </div>
+        <div class="${big ? 'h-10 md:h-12 bg-white/10' : 'h-3 bg-slate-100'} rounded-full overflow-hidden">
+          <div class="fill bar-fill h-full rounded-full" style="width:0%"></div>
+        </div>
+      </div>`).join('') + `</div>`;
+  }
+  const total = rows.reduce((a, r) => a + r.count, 0);
+  requestAnimationFrame(() => rows.forEach(r => {
+    const row = el.querySelector(`[data-k="${CSS.escape(String(r.key))}"]`); if (!row) return;
+    const pct = total ? Math.round((r.count / total) * 100) : 0;
+    const cnt = row.querySelector('.cnt');
+    if (cnt.textContent !== String(r.count)) { cnt.textContent = r.count; cnt.classList.remove('pop'); void cnt.offsetWidth; cnt.classList.add('pop'); }
+    row.querySelector('.pct').textContent = `(${pct}%)`;
+    const fill = row.querySelector('.fill');
+    fill.style.width = pct + '%';
+    fill.style.background = hasKey
+      ? (r.correct ? '#10B981' : (big ? '#64748B' : '#94A3B8'))
+      : ((r.count === max && max > 0) ? '#10B981' : (big ? '#D4A017' : '#1B3F73'));
+  }));
+}
+
+// showKey: highlight the correct option (admin panel always; stage only when revealed)
+function paintResults(el, q, agg, big = false, showKey = false) {
+  if (!q) { el.dataset.sig = ''; el.innerHTML = ''; return; }
+  if (q.type === 'mcq') {
+    const key = showKey ? S.answers[q.id] : null;
+    paintBars(el, (q.options || []).map(o => ({ key: o.id, label: o.label, count: agg.counts[o.id] || 0, correct: !!key && key === o.id })), big);
+  } else if (q.type === 'rating') {
+    const rows = [5, 4, 3, 2, 1].map(i => ({ key: 'r' + i, label: '★'.repeat(i), count: agg.counts[i] || 0 }));
+    const headSig = 'avg' + (big ? 'B' : '');
+    if (!el.querySelector('.avg-box') || el.dataset.head !== headSig) {
+      el.dataset.head = headSig; el.dataset.sig = '';
+      el.innerHTML = `<div class="avg-box ${big ? 'text-6xl mb-6' : 'text-3xl mb-3'} font-extrabold text-gold">0.0 <span class="${big ? 'text-2xl' : 'text-sm'} text-slate-400 font-semibold">average</span></div><div class="bars"></div>`;
+    }
+    el.querySelector('.avg-box').firstChild.nodeValue = (agg.avg || 0).toFixed(1) + ' ';
+    paintBars(el.querySelector('.bars'), rows, big);
+  } else {
+    el.dataset.sig = ''; el.dataset.head = '';
+    const words = agg.words || [];
+    if (!words.length) { el.innerHTML = `<div class="${big ? 'text-2xl text-slate-300' : 'text-sm text-slate-400'}">No words yet…</div>`; return; }
+    const max = words[0].n, min = words[words.length - 1].n;
+    const [lo, hi] = big ? [22, 84] : [12, 32];
+    el.innerHTML = `<div class="text-center leading-relaxed">` + words.map((x, i) => {
+      const size = max === min ? (lo + hi) / 2 : lo + ((x.n - min) / (max - min)) * (hi - lo);
+      return `<span class="word" title="${x.n}" style="font-size:${size.toFixed(0)}px;color:${big ? PALETTE[i % PALETTE.length] : ['#0B1F3A', '#10B981', '#B88A0F', '#1B3F73'][i % 4]}">${esc(x.w)}</span>`;
+    }).join('') + `</div>`;
+  }
+}
+
+// =====================================================================
+//  Rendering
+// =====================================================================
+function renderAll() { renderHeader(); renderSeminars(); renderQuestions(); renderLive(); renderPresent(); }
+
+function renderHeader() {
+  $('hdrSeminar').textContent = S.meeting.activeSeminarTitle ? 'Live: ' + S.meeting.activeSeminarTitle : 'No seminar live';
+}
+
+function renderCounters() {
+  const joined = S.participants, voted = S.votesQid ? S.votes.length : 0;
+  const pct = joined ? Math.min(100, Math.round((voted / joined) * 100)) : 0;
+  $('hdrJoined').textContent = joined; $('rosterCount').textContent = joined;
+  $('joinCount').textContent = joined; $('voteCount').textContent = voted;
+  $('votePct').textContent = pct + '%'; $('voteProg').style.width = pct + '%';
+  $('pVotes').textContent = voted; $('pJoined').textContent = joined;
+}
+
+function renderSeminars() {
+  const list = $('seminarList');
+  if (!S.seminars.length) { list.innerHTML = '<p class="text-sm text-slate-400">No seminars yet. Add one below.</p>'; return; }
+  list.innerHTML = S.seminars.map(s => {
+    const sel = s.id === S.selectedSeminarId, live = s.id === S.meeting.activeSeminarId;
+    const n = seminarQuestions(s.id).length;
+    return `<div class="rounded-xl border ${sel ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'} p-2.5 cursor-pointer" data-sel="${s.id}">
+      <div class="flex items-start gap-2">
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-sm text-navy truncate">${esc(s.title)}</div>
+          <div class="text-xs text-slate-500">${n} question${n === 1 ? '' : 's'}</div>
+        </div>
+        ${live ? '<span class="text-[10px] font-bold bg-emerald-600 text-white rounded-full px-2 py-0.5">LIVE</span>' : ''}
+      </div>
+      <div class="flex gap-3 mt-1.5 text-xs">
+        ${live ? '' : `<button class="text-emerald-700 font-semibold hover:underline" data-golive-sem="${s.id}">Set live</button>`}
+        <button class="text-slate-500 hover:underline" data-rename-sem="${s.id}">Rename</button>
+        <button class="text-red-600 hover:underline" data-del-sem="${s.id}">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$('seminarList').addEventListener('click', async e => {
+  const t = e.target;
+  if (t.dataset.goliveSem) {
+    e.stopPropagation();
+    await mRef.update({ activeSeminarId: t.dataset.goliveSem, activeSeminarTitle: seminarTitle(t.dataset.goliveSem), activeQuestionId: null, votingStatus: 'LOCKED', resultVisibility: 'HIDE', updatedAt: FV.serverTimestamp() });
+    S.selectedSeminarId = t.dataset.goliveSem; toast('Seminar is now live');
+  } else if (t.dataset.renameSem) {
+    e.stopPropagation();
+    const sid = t.dataset.renameSem, title = prompt('Rename seminar', seminarTitle(sid));
+    if (!title || !title.trim()) return;
+    await mRef.collection('seminars').doc(sid).update({ title: title.trim() });
+    if (S.meeting.activeSeminarId === sid) await mRef.update({ activeSeminarTitle: title.trim() });
+  } else if (t.dataset.delSem) {
+    e.stopPropagation();
+    const sid = t.dataset.delSem;
+    if (!confirm(`Delete "${seminarTitle(sid)}" and all its questions & votes?`)) return;
+    for (const q of seminarQuestions(sid)) await deleteQuestion(q.id, true);
+    await mRef.collection('seminars').doc(sid).delete();
+    if (S.meeting.activeSeminarId === sid) await mRef.update({ activeSeminarId: null, activeSeminarTitle: '' });
+    if (S.selectedSeminarId === sid) S.selectedSeminarId = null;
+    toast('Seminar deleted');
+  } else {
+    const card = t.closest('[data-sel]');
+    if (card) { S.selectedSeminarId = card.dataset.sel; resetBuilder(); renderSeminars(); renderQuestions(); }
+  }
+});
+
+$('seminarForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const title = $('seminarTitle').value.trim(); if (!title) return;
+  const ref = await mRef.collection('seminars').add({ title, createdAt: FV.serverTimestamp() });
+  S.selectedSeminarId = ref.id; $('seminarTitle').value = ''; toast('Seminar added');
+});
+
+function renderQuestions() {
+  const sid = S.selectedSeminarId;
+  $('qSeminarName').textContent = sid ? seminarTitle(sid) : 'select a seminar';
+  $('builderCard').classList.toggle('opacity-50', !sid);
+  $('builderCard').classList.toggle('pointer-events-none', !sid);
+  const list = $('questionList');
+  if (!sid) { list.innerHTML = '<p class="text-sm text-slate-400">Create or select a seminar first.</p>'; $('qCount').textContent = ''; return; }
+  const qs = seminarQuestions(sid);
+  refreshBoard();
+  $('qCount').textContent = qs.length + ' total';
+  if (!qs.length) { list.innerHTML = '<p class="text-sm text-slate-400">No questions yet. Add one below.</p>'; return; }
+  list.innerHTML = qs.map((q, i) => {
+    const live = q.id === S.meeting.activeQuestionId;
+    return `<div class="rounded-xl border ${live ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'} p-3 fade-in">
+      <div class="flex items-start gap-2">
+        <div class="w-7 h-7 shrink-0 rounded-lg bg-navy text-white text-xs font-bold flex items-center justify-center">${i + 1}</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-semibold text-navy break-words">${esc(q.text)}</div>
+          <div class="text-xs text-slate-500 mt-0.5">${TYPE_ICON[q.type]} ${TYPE_LABEL[q.type]}${q.type === 'mcq' ? ' · ' + (q.options || []).length + ' options' : ''}${q.type === 'mcq' && S.answers[q.id] ? ' · <span class="font-bold text-gold-600">🏆 Scored</span>' : ''}</div>
+        </div>
+        ${live ? '<span class="text-[10px] font-bold bg-emerald-600 text-white rounded-full px-2 py-0.5 shrink-0">LIVE</span>' : ''}
+      </div>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs">
+        ${live ? '' : `<button class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-md px-2.5 py-1" data-act="live" data-id="${q.id}">Go live</button>`}
+        <button class="text-slate-600 hover:underline" data-act="up" data-id="${q.id}" ${i === 0 ? 'disabled style="opacity:.3"' : ''}>↑</button>
+        <button class="text-slate-600 hover:underline" data-act="down" data-id="${q.id}" ${i === qs.length - 1 ? 'disabled style="opacity:.3"' : ''}>↓</button>
+        <button class="text-navy-600 hover:underline font-semibold" data-act="edit" data-id="${q.id}">Edit</button>
+        <button class="text-amber-700 hover:underline font-semibold" data-act="reset" data-id="${q.id}">Reset votes</button>
+        <button class="text-red-600 hover:underline font-semibold" data-act="del" data-id="${q.id}">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$('questionList').addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
+  const id = b.dataset.id, q = S.questions.find(x => x.id === id); if (!q) return;
+  const act = b.dataset.act;
+  if (act === 'live') goLive(q);
+  else if (act === 'edit') loadIntoBuilder(q);
+  else if (act === 'reset') { if (confirm('Delete all votes for this question?')) { await resetVotes(id); toast('Votes reset'); } }
+  else if (act === 'del') { if (confirm('Delete this question and its votes?')) { await deleteQuestion(id); toast('Question deleted'); } }
+  else if (act === 'up' || act === 'down') {
+    const qs = seminarQuestions(q.seminarId), i = qs.findIndex(x => x.id === id), j = act === 'up' ? i - 1 : i + 1;
+    if (j < 0 || j >= qs.length) return;
+    const other = qs[j], batch = db.batch(), col = mRef.collection('questions');
+    // normalise order values then swap
+    qs.forEach((x, k) => batch.update(col.doc(x.id), { order: k === i ? j : k === j ? i : k }));
+    await batch.commit();
+  }
+});
+
+async function goLive(q) {
+  S.presentBoard = false;
+  // launch time is the start line for response-time tie-breaks (kept if re-opened later)
+  if (!q.launchedAt) await mRef.collection('questions').doc(q.id).update({ launchedAt: FV.serverTimestamp() });
+  await mRef.update({
+    activeQuestionId: q.id, votingStatus: 'OPEN', resultVisibility: 'HIDE', revealAnswer: false,
+    activeSeminarId: q.seminarId, activeSeminarTitle: seminarTitle(q.seminarId), updatedAt: FV.serverTimestamp()
+  });
+  await resultsRef.set({ ...aggregate(q, []), correctOptionId: null, updatedAt: FV.serverTimestamp() });
+}
+
+async function deleteDocsIn(colRef) {
+  const snap = await colRef.get();
+  const docs = snap.docs;
+  for (let i = 0; i < docs.length; i += 450) {
+    const batch = db.batch(); docs.slice(i, i + 450).forEach(d => batch.delete(d.ref)); await batch.commit();
+  }
+  return docs.length;
+}
+async function resetVotes(qid) {
+  await deleteDocsIn(votesCol(qid));
+  delete S.voteCache[qid];
+  const active = qid === S.meeting.activeQuestionId;
+  // restart the clock if live, otherwise clear it so the next "Go live" starts fresh
+  await mRef.collection('questions').doc(qid).update({ launchedAt: active ? FV.serverTimestamp() : FV.delete() });
+  if (active) scheduleResultsWrite();
+  refreshBoard();
+}
+async function deleteQuestion(qid, silent) {
+  if (qid === S.meeting.activeQuestionId) await mRef.update({ activeQuestionId: null, votingStatus: 'LOCKED', resultVisibility: 'HIDE', revealAnswer: false });
+  await deleteDocsIn(votesCol(qid));
+  await mRef.collection('questions').doc(qid).delete();
+  if (S.answers[qid]) await answersRef.set({ [qid]: FV.delete() }, { merge: true });
+  delete S.voteCache[qid];
+  if (S.editingId === qid) resetBuilder();
+}
+
+// ---------------- Live controls ----------------
+function renderLive() {
+  const m = S.meeting, q = activeQuestion();
+  const open = m.votingStatus === 'OPEN', show = m.resultVisibility === 'SHOW';
+  $('toggleOpen').classList.toggle('on', open);
+  $('toggleShow').classList.toggle('on', show);
+  const scored = !!(q && q.type === 'mcq' && S.answers[q.id]);
+  $('revealRow').classList.toggle('hidden', !scored);
+  $('toggleReveal').classList.toggle('on', scored && !!m.revealAnswer);
+  const badge = $('liveBadge');
+  if (!q) { badge.textContent = 'IDLE'; badge.className = 'text-xs font-bold rounded-full px-2.5 py-1 bg-slate-100 text-slate-500'; }
+  else if (open) { badge.textContent = '● VOTING OPEN'; badge.className = 'text-xs font-bold rounded-full px-2.5 py-1 bg-emerald-100 text-emerald-700'; }
+  else { badge.textContent = '🔒 LOCKED'; badge.className = 'text-xs font-bold rounded-full px-2.5 py-1 bg-amber-100 text-amber-700'; }
+
+  $('liveQuestion').innerHTML = q
+    ? `<div class="text-xs text-slate-500 mb-1">${TYPE_ICON[q.type]} ${TYPE_LABEL[q.type]} · ${esc(seminarTitle(q.seminarId))}</div><div class="font-bold text-navy text-base">${esc(q.text)}</div>`
+    : 'No question is live. Press <b>Go live</b> on a question.';
+
+  paintResults($('adminResults'), q, q ? aggregate(q, S.votes) : null, false, true);
+  renderCounters();
+
+  const recent = [...S.votes].sort((a, b) => ((b.ts && b.ts.seconds) || 9e12) - ((a.ts && a.ts.seconds) || 9e12)).slice(0, 30);
+  $('recentList').innerHTML = recent.length ? recent.map(v => {
+    let ans = '';
+    if (q && q.type === 'mcq') ans = ((q.options || []).find(o => o.id === v.optionId) || {}).label || '—';
+    else if (q && q.type === 'rating') ans = '★'.repeat(v.rating || 0);
+    else ans = v.text || '';
+    return `<div class="flex justify-between gap-2 border-b border-slate-100 py-1"><span class="font-semibold truncate">${esc(v.name)}</span><span class="text-slate-500 truncate">${esc(ans)}</span></div>`;
+  }).join('') : '<p class="text-slate-400">No responses yet.</p>';
+}
+
+async function setOpen(open) { await mRef.update({ votingStatus: open ? 'OPEN' : 'LOCKED' }); }
+async function setShow(show) { scheduleResultsWrite(); await mRef.update({ resultVisibility: show ? 'SHOW' : 'HIDE' }); }
+$('toggleOpen').onclick = () => { if (!activeQuestion()) return toast('No live question'); setOpen(S.meeting.votingStatus !== 'OPEN'); };
+$('toggleShow').onclick = () => { if (!activeQuestion()) return toast('No live question'); setShow(S.meeting.resultVisibility !== 'SHOW'); };
+async function setReveal(on) {
+  const q = activeQuestion();
+  if (!q || q.type !== 'mcq' || !S.answers[q.id]) return toast('This question has no correct answer set');
+  const upd = { revealAnswer: on };
+  if (on) { upd.resultVisibility = 'SHOW'; upd.votingStatus = 'LOCKED'; }   // revealing closes voting
+  await mRef.update(upd);
+}
+$('toggleReveal').onclick = () => setReveal(!S.meeting.revealAnswer);
+
+function step(dir) {
+  const cur = activeQuestion();
+  const sid = cur ? cur.seminarId : (S.meeting.activeSeminarId || S.selectedSeminarId);
+  const qs = seminarQuestions(sid); if (!qs.length) return toast('No questions in this seminar');
+  let i = cur ? qs.findIndex(q => q.id === cur.id) + dir : (dir > 0 ? 0 : qs.length - 1);
+  if (i < 0 || i >= qs.length) return toast(dir > 0 ? 'That was the last question' : 'Already at the first question');
+  goLive(qs[i]);
+}
+$('prevBtn').onclick = () => step(-1);
+$('nextBtn').onclick = () => step(1);
+$('endBtn').onclick = () => mRef.update({ activeQuestionId: null, votingStatus: 'LOCKED', resultVisibility: 'HIDE', revealAnswer: false });
+$('resetLiveBtn').onclick = async () => {
+  const q = activeQuestion(); if (!q) return toast('No live question');
+  if (confirm('Delete all votes for the live question?')) { await resetVotes(q.id); toast('Votes reset'); }
+};
+
+// ---------------- Settings ----------------
+$('saveCodeBtn').onclick = async () => {
+  const code = $('accessCode').value.trim().toUpperCase();
+  if (code.length < 3) return toast('Code must be at least 3 characters');
+  await configRef.set({ accessCode: code }); S.accessCode = code; $('accessCode').value = code;
+  renderPresentStatic(); toast('Access code saved');
+};
+$('copyUrlBtn').onclick = async () => {
+  try { await navigator.clipboard.writeText(joinUrl()); toast('Link copied'); } catch (e) { $('joinUrl').select(); }
+};
+$('clearRosterBtn').onclick = async () => {
+  if (!confirm('Remove all participants? They will need to re-join with the access code.')) return;
+  const n = await deleteDocsIn(mRef.collection('participants')); toast(n + ' participants removed');
+};
+
+// ---------------- Question builder ----------------
+function setBuilderType(type) {
+  S.builderType = type;
+  document.querySelectorAll('.type-btn').forEach(b => {
+    const on = b.dataset.type === type;
+    b.className = 'type-btn rounded-lg border px-2 py-2 text-xs font-semibold ' + (on ? 'bg-navy text-white border-navy' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50');
+  });
+  $('optionsWrap').classList.toggle('hidden', type !== 'mcq');
+  $('typeHint').textContent = type === 'rating' ? 'Participants rate from 1 to 5 stars; average is shown.'
+    : type === 'wordcloud' ? 'Participants submit a short word or phrase (max 40 characters).'
+    : 'Participants pick one option (2–8). Tap ✓ to mark the correct answer → question is scored for the leaderboard. Leave unmarked for an opinion poll.';
+  if (type !== 'mcq') S.builderCorrect = null;
+  paintCorrectMarks();
+}
+
+function paintCorrectMarks() {
+  document.querySelectorAll('#optionInputs .mark').forEach(btn => {
+    const on = btn.dataset.oid === S.builderCorrect;
+    btn.className = 'mark w-9 shrink-0 rounded-lg border font-bold text-sm transition ' +
+      (on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 text-slate-300 hover:text-emerald-600 hover:border-emerald-500');
+    btn.title = on ? 'Correct answer' : 'Mark as correct answer';
+  });
+}
+document.querySelectorAll('.type-btn').forEach(b => b.onclick = () => setBuilderType(b.dataset.type));
+
+function addOptionInput(label = '', id = '') {
+  const wrap = $('optionInputs');
+  if (wrap.children.length >= 8) return toast('Maximum 8 options');
+  const oid = id || newId();
+  const row = document.createElement('div');
+  row.className = 'flex gap-2';
+  row.innerHTML = `<button type="button" class="mark" data-oid="${esc(oid)}">✓</button>
+    <input class="opt flex-1 min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" maxlength="80" placeholder="Option ${wrap.children.length + 1}" data-oid="${esc(oid)}">
+    <button type="button" class="rm px-2 text-slate-400 hover:text-red-600">✕</button>`;
+  row.querySelector('.opt').value = label;
+  row.querySelector('.mark').onclick = () => { S.builderCorrect = S.builderCorrect === oid ? null : oid; paintCorrectMarks(); };
+  row.querySelector('.rm').onclick = () => {
+    if (wrap.children.length <= 2) return toast('Minimum 2 options');
+    if (S.builderCorrect === oid) S.builderCorrect = null;
+    row.remove();
+  };
+  wrap.appendChild(row);
+  paintCorrectMarks();
+}
+$('addOptBtn').onclick = () => addOptionInput();
+
+function resetBuilder() {
+  S.editingId = null; S.builderCorrect = null; $('qText').value = ''; $('optionInputs').innerHTML = '';
+  addOptionInput(); addOptionInput(); setBuilderType('mcq');
+  $('builderTitle').textContent = 'New question'; $('saveQBtn').textContent = 'Add question';
+  $('cancelEditBtn').classList.add('hidden');
+}
+function loadIntoBuilder(q) {
+  S.editingId = q.id; $('qText').value = q.text; $('optionInputs').innerHTML = '';
+  S.builderCorrect = S.answers[q.id] || null;
+  (q.options && q.options.length ? q.options : [{}, {}]).forEach(o => addOptionInput(o.label || '', o.id || ''));
+  setBuilderType(q.type);
+  $('builderTitle').textContent = 'Edit question'; $('saveQBtn').textContent = 'Save changes';
+  $('cancelEditBtn').classList.remove('hidden');
+  $('builderCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+$('cancelEditBtn').onclick = resetBuilder;
+
+$('builderForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const sid = S.selectedSeminarId; if (!sid) return toast('Select a seminar first');
+  const text = $('qText').value.trim(); if (!text) return toast('Enter the question');
+  const type = S.builderType;
+  let options = [];
+  if (type === 'mcq') {
+    options = [...document.querySelectorAll('#optionInputs .opt')].map(i => ({ id: i.dataset.oid, label: i.value.trim() })).filter(o => o.label);
+    if (options.length < 2) return toast('Add at least 2 options');
+  }
+  const correct = type === 'mcq' && options.some(o => o.id === S.builderCorrect) ? S.builderCorrect : null;
+  $('saveQBtn').disabled = true;
+  try {
+    const col = mRef.collection('questions');
+    const ref = S.editingId ? col.doc(S.editingId) : col.doc();
+    if (S.editingId) {
+      await ref.update({ text, type, options, updatedAt: FV.serverTimestamp() });
+    } else {
+      const qs = seminarQuestions(sid);
+      const order = qs.length ? Math.max(...qs.map(q => q.order || 0)) + 1 : 0;
+      await ref.set({ seminarId: sid, text, type, options, order, createdAt: FV.serverTimestamp() });
+    }
+    // answer key lives in an admin-only doc so participants can't peek
+    if (correct || S.answers[ref.id]) await answersRef.set({ [ref.id]: correct || FV.delete() }, { merge: true });
+    toast(S.editingId ? 'Question updated' : correct ? 'Scored question added 🏆' : 'Question added');
+    resetBuilder();
+  } catch (err) { console.error(err); toast('Save failed: ' + err.message); }
+  finally { $('saveQBtn').disabled = false; }
+});
+
+// =====================================================================
+//  Presentation mode
+// =====================================================================
+function renderPresentStatic() {
+  $('pUrl').textContent = joinUrl().replace(/^https?:\/\//, '');
+  $('pCode').textContent = S.accessCode;
+  const qr = $('qr'); qr.innerHTML = '';
+  try { new QRCode(qr, { text: joinUrl(), width: 116, height: 116, colorDark: '#0B1F3A', colorLight: '#ffffff' }); } catch (e) { qr.classList.add('hidden'); }
+}
+
+function renderPresent() {
+  if (!S.presenting) return;
+  const m = S.meeting, q = activeQuestion();
+  $('pBoard').textContent = S.presentBoard ? '✕ Close winners' : '🏆 Winners';
+  const st = $('pStatus');
+
+  if (S.presentBoard) {
+    const b = S.board, el = $('pResults');
+    $('pSeminar').textContent = seminarTitle(b.sid) || m.activeSeminarTitle || CFG.orgName;
+    st.textContent = 'LEADERBOARD'; st.className = 'mt-3 inline-block text-xs font-bold tracking-wider rounded-full px-3 py-1 bg-gold text-navy';
+    $('pQuestion').textContent = '🏆 Top performers';
+    el.dataset.mode = 'board'; el.dataset.sig = ''; el.dataset.head = '';
+    if (!b.total || !b.rows.length) {
+      el.innerHTML = `<div class="text-2xl text-slate-300">${b.total ? 'No answers yet.' : 'No scored questions in this seminar yet.'}</div>`;
+    } else {
+      el.innerHTML = `<div class="max-w-4xl space-y-3 overflow-y-auto h-full pr-2">` + b.rows.slice(0, 10).map((r, i) => `
+        <div class="flex items-center gap-4 rounded-2xl px-5 py-3 fade-in ${i === 0 ? 'bg-gold/25 ring-2 ring-gold' : i < 3 ? 'bg-white/15' : 'bg-white/5'}" style="animation-delay:${i * 80}ms">
+          <span class="w-12 text-center ${i < 3 ? 'text-4xl' : 'text-2xl font-bold text-slate-400'}">${MEDAL[i] || i + 1}</span>
+          <span class="flex-1 min-w-0 truncate ${i < 3 ? 'text-3xl' : 'text-2xl'} font-bold">${esc(r.name)}</span>
+          <span class="text-3xl font-extrabold text-emerald-400">${r.correct}<span class="text-lg text-slate-400">/${b.total}</span></span>
+          <span class="w-20 text-right text-slate-400">${avgSec(r)}</span>
+        </div>`).join('') + `</div>`;
+    }
+    renderCounters();
+    return;
+  }
+
+  $('pSeminar').textContent = m.activeSeminarTitle || CFG.orgName;
+  if (!q) { st.textContent = 'STAND BY'; st.className = 'mt-3 inline-block text-xs font-bold tracking-wider rounded-full px-3 py-1 bg-white/10'; }
+  else if (m.votingStatus === 'OPEN') { st.textContent = '● VOTING OPEN'; st.className = 'mt-3 inline-block text-xs font-bold tracking-wider rounded-full px-3 py-1 bg-emerald-500 text-navy'; }
+  else { st.textContent = '🔒 VOTING CLOSED'; st.className = 'mt-3 inline-block text-xs font-bold tracking-wider rounded-full px-3 py-1 bg-gold text-navy'; }
+
+  $('pQuestion').textContent = q ? q.text : 'Join now — the next question is coming up';
+  $('pToggleShow').textContent = m.resultVisibility === 'SHOW' ? 'Hide results' : 'Show results';
+  $('pToggleOpen').textContent = m.votingStatus === 'OPEN' ? 'Lock' : 'Unlock';
+
+  const el = $('pResults');
+  if (!q) { el.dataset.sig = ''; el.dataset.head = ''; el.innerHTML = `<div class="text-2xl text-slate-300">Scan the QR code or open the link, enter your name and code <b class="text-gold font-mono">${esc(S.accessCode)}</b>.</div>`; return; }
+  if (m.resultVisibility === 'SHOW') {
+    if (el.dataset.mode !== 'show') { el.dataset.mode = 'show'; el.dataset.sig = ''; el.dataset.head = ''; el.innerHTML = ''; }
+    paintResults(el, q, aggregate(q, S.votes), true, !!m.revealAnswer);
+  } else {
+    el.dataset.mode = 'hide'; el.dataset.sig = ''; el.dataset.head = '';
+    el.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center fade-in">
+      <div class="text-8xl font-extrabold text-emerald-400">${S.votes.length}</div>
+      <div class="text-2xl text-slate-300 mt-2">responses so far · results hidden</div></div>`;
+  }
+  renderCounters();
+}
+
+$('presentBtn').onclick = () => {
+  S.presenting = true; $('presentView').classList.remove('hidden');
+  renderPresentStatic(); $('pResults').dataset.mode = ''; renderPresent();
+  document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {});
+};
+function exitPresent() {
+  S.presenting = false; S.presentBoard = false; $('presentView').classList.add('hidden');
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+$('pExit').onclick = exitPresent;
+$('pPrev').onclick = () => step(-1);
+$('pNext').onclick = () => step(1);
+$('pToggleShow').onclick = () => activeQuestion() && setShow(S.meeting.resultVisibility !== 'SHOW');
+$('pToggleOpen').onclick = () => activeQuestion() && setOpen(S.meeting.votingStatus !== 'OPEN');
+$('pBoard').onclick = () => {
+  S.presentBoard = !S.presentBoard;
+  if (S.presentBoard && S.meeting.activeSeminarId && S.selectedSeminarId !== S.meeting.activeSeminarId) {
+    S.selectedSeminarId = S.meeting.activeSeminarId; renderSeminars(); renderQuestions();
+  }
+  $('pResults').dataset.mode = ''; refreshBoard(); renderPresent();
+};
+document.addEventListener('keydown', e => {
+  if (!S.presenting || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+  if (e.key === 'ArrowRight') step(1);
+  else if (e.key === 'ArrowLeft') step(-1);
+  else if (e.key.toLowerCase() === 'r') $('pToggleShow').click();
+  else if (e.key.toLowerCase() === 'l') $('pToggleOpen').click();
+  else if (e.key.toLowerCase() === 'a') setReveal(!S.meeting.revealAnswer);
+  else if (e.key.toLowerCase() === 'w') $('pBoard').click();
+  else if (e.key === 'Escape' && !document.fullscreenElement) exitPresent();
+});
+
+resetBuilder();
+</script>
+</body>
+</html>

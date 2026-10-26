@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0B1F3A">
+<title>Wallet4Wealth Live</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      colors: {
+        navy: { DEFAULT: '#0B1F3A', 900: '#071528', 800: '#0B1F3A', 700: '#12305A', 600: '#1B3F73' },
+        gold: { DEFAULT: '#D4A017', 400: '#E4B83A', 600: '#B88A0F' }
+      },
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+    } }
+  };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// ===== Wallet4Wealth Live — Firebase config (eventorg) =====
+window.W4W_CONFIG = {
+  firebase: {
+    apiKey: "AIzaSyCgE4LLMBMIDBalzdxkdBrU5ysFQNW6Y_o",
+    authDomain: "eventorg-d20b9.firebaseapp.com",
+    projectId: "eventorg-d20b9",
+    storageBucket: "eventorg-d20b9.firebasestorage.app",
+    messagingSenderId: "552242799477",
+    appId: "1:552242799477:web:c0ac1454a44dcaf6ef293c"
+  },
+  meetingId: "w4w-live",
+  defaultAccessCode: "W4W2026",
+  orgName: "Wallet4Wealth"
+};
+</script>
+<style>
+  body { font-family: Inter, system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+  .bar-fill { transition: width .7s cubic-bezier(.22,1,.36,1); }
+  .fade-in { animation: fadeIn .35s ease both; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .pop { animation: pop .3s ease; }
+  @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.15); } 100% { transform: scale(1); } }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #10B981; animation: bounce 1.2s infinite ease-in-out; }
+  .dot:nth-child(2) { animation-delay: .15s; } .dot:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%, 80%, 100% { transform: scale(.5); opacity: .4; } 40% { transform: scale(1); opacity: 1; } }
+  .check { animation: pop .45s ease; }
+  .word { display: inline-block; margin: 3px 8px; line-height: 1.1; font-weight: 700; animation: fadeIn .4s ease both; }
+  .star { font-size: 2.6rem; line-height: 1; transition: transform .15s, color .15s; }
+  .star:active { transform: scale(.9); }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+
+<!-- Loading -->
+<div id="loadingView" class="min-h-screen flex items-center justify-center">
+  <div class="flex gap-2"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+</div>
+
+<!-- Join -->
+<div id="joinView" class="hidden min-h-screen flex flex-col bg-gradient-to-br from-navy-900 via-navy-800 to-navy-600">
+  <div class="flex-1 flex items-center justify-center p-5">
+    <div class="w-full max-w-sm fade-in">
+      <div class="text-center text-white mb-6">
+        <div class="w-14 h-14 mx-auto rounded-2xl bg-white/10 flex items-center justify-center text-gold font-extrabold text-lg mb-3">W4W</div>
+        <h1 class="text-2xl font-extrabold">Wallet4Wealth Live</h1>
+        <p class="text-slate-300 text-sm mt-1">Join the session to vote &amp; share feedback</p>
+      </div>
+      <form id="joinForm" class="bg-white rounded-2xl shadow-2xl p-6 space-y-4">
+        <div>
+          <label class="text-xs font-semibold text-slate-600">Your name</label>
+          <input id="jName" required maxlength="60" autocomplete="name" placeholder="e.g. Priya Das" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-600">Access code</label>
+          <input id="jCode" required maxlength="20" autocapitalize="characters" autocomplete="off" placeholder="W4W2026" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-mono uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+        <p id="joinErr" class="text-sm text-red-600 min-h-[1.25rem]"></p>
+        <button id="joinBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl py-3.5 text-base transition">Join session</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="appView" class="hidden min-h-screen flex flex-col">
+  <header class="bg-navy text-white sticky top-0 z-20 shadow" style="padding-top: env(safe-area-inset-top)">
+    <div class="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
+      <div class="w-9 h-9 shrink-0 rounded-lg bg-white/10 flex items-center justify-center text-gold font-extrabold text-xs">W4W</div>
+      <div class="flex-1 min-w-0">
+        <div id="hSeminar" class="font-bold text-sm truncate">Wallet4Wealth Live</div>
+        <div class="text-xs text-slate-300 truncate">Hi, <span id="hName"></span></div>
+      </div>
+      <button id="leaveBtn" class="text-xs bg-white/10 hover:bg-white/20 rounded-lg px-3 py-1.5">Leave</button>
+    </div>
+  </header>
+  <div id="offline" class="hidden bg-amber-500 text-navy text-xs font-semibold text-center py-1">You're offline — reconnecting…</div>
+
+  <main class="flex-1 w-full max-w-lg mx-auto p-4 space-y-4">
+    <section id="stage"></section>
+    <section id="resultsBox"></section>
+  </main>
+
+  <footer id="counterBar" class="hidden sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-200" style="padding-bottom: env(safe-area-inset-bottom)">
+    <div class="max-w-lg mx-auto px-4 py-3">
+      <div class="flex justify-between text-sm"><span><b id="cVoted" class="text-navy">0</b> / <span id="cJoined">0</span> participants voted</span><span id="cPct" class="text-slate-500">0%</span></div>
+      <div class="h-1.5 bg-slate-200 rounded-full mt-1.5 overflow-hidden"><div id="cProg" class="h-full bg-emerald-500 bar-fill" style="width:0%"></div></div>
+    </div>
+  </footer>
+</div>
+
+<div id="toast" class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 hidden bg-navy text-white text-sm px-4 py-2.5 rounded-xl shadow-lg text-center max-w-[90vw]"></div>
+
+<script>
+// =====================================================================
+//  Setup
+// =====================================================================
+const CFG = window.W4W_CONFIG;
+const app = firebase.initializeApp(CFG.firebase, 'w4wParticipant');
+const auth = app.auth();
+const db = app.firestore();
+const FV = firebase.firestore.FieldValue;
+const mRef = db.collection('meetings').doc(CFG.meetingId);
+const resultsRef = mRef.collection('live').doc('results');
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const LS = {
+  get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+const RATING_LABELS = ['Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
+
+const S = {
+  uid: null, name: '', meeting: {}, qid: null, q: null, myVote: undefined, results: null,
+  joined: false, mode: '', stageSig: '', selection: null, submitting: false, unsub: {}
+};
+
+function show(view) {
+  ['loadingView', 'joinView', 'appView'].forEach(v => $(v).classList.toggle('hidden', v !== view));
+}
+function toast(msg, ms = 2500) {
+  const t = $('toast'); t.textContent = msg; t.classList.remove('hidden');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), ms);
+}
+const pRef = () => mRef.collection('participants').doc(S.uid);
+const qRef = () => mRef.collection('questions').doc(S.qid);
+const votedKey = qid => 'w4w_voted_' + CFG.meetingId + '_' + qid;
+
+window.addEventListener('online', () => $('offline').classList.add('hidden'));
+window.addEventListener('offline', () => $('offline').classList.remove('hidden'));
+
+// =====================================================================
+//  Auth + Join
+// =====================================================================
+auth.onAuthStateChanged(async user => {
+  if (!user) {
+    try { await auth.signInAnonymously(); }
+    catch (e) { console.error(e); prefillJoin(); $('joinErr').textContent = 'Could not connect. Check your internet and refresh.'; show('join'); }
+    return;
+  }
+  S.uid = user.uid;
+  prefillJoin();
+  try {
+    const p = await pRef().get();
+    if (p.exists) { S.name = p.data().name; enterApp(); }
+    else show('join');
+  } catch (e) { show('join'); }
+});
+
+function prefillJoin() {
+  $('jName').value = LS.get('w4w_name') || '';
+  $('jCode').value = LS.get('w4w_code') || '';
+}
+
+$('joinForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('jName').value.trim().replace(/\s+/g, ' ').slice(0, 60);
+  const code = $('jCode').value.trim().toUpperCase();
+  if (!name) return ($('joinErr').textContent = 'Please enter your name.');
+  if (!S.uid) return ($('joinErr').textContent = 'Still connecting… try again in a moment.');
+  $('joinErr').textContent = ''; $('joinBtn').disabled = true; $('joinBtn').textContent = 'Joining…';
+  try {
+    await pRef().set({ name, code, joinedAt: FV.serverTimestamp() });
+    LS.set('w4w_name', name); LS.set('w4w_code', code);
+    S.name = name; enterApp();
+  } catch (err) {
+    $('joinErr').textContent = err.code === 'permission-denied' ? 'Invalid access code. Please check with the host.' : 'Could not join: ' + err.message;
+  } finally {
+    $('joinBtn').disabled = false; $('joinBtn').textContent = 'Join session';
+  }
+});
+
+$('leaveBtn').onclick = () => {
+  if (!confirm('Leave this session?')) return;
+  stopAll(); prefillJoin(); show('join');
+};
+
+// =====================================================================
+//  Live listeners
+// =====================================================================
+function enterApp() {
+  stopAll();
+  show('app'); $('hName').textContent = S.name;
+  S.joined = false;
+
+  S.unsub.me = pRef().onSnapshot(snap => {
+    if (snap.exists) { S.joined = true; S.name = snap.data().name; $('hName').textContent = S.name; }
+    else if (S.joined) { stopAll(); prefillJoin(); $('joinErr').textContent = 'The host reset the session. Please join again.'; show('join'); }
+  }, () => {});
+
+  S.unsub.meeting = mRef.onSnapshot(snap => {
+    S.meeting = snap.data() || {};
+    $('hSeminar').textContent = S.meeting.activeSeminarTitle || CFG.orgName + ' Live';
+    watchQuestion(S.meeting.activeQuestionId || null);
+    watchResults();
+    render();
+  }, err => { console.error(err); toast('Connection problem. Please refresh.'); });
+}
+
+function stopAll() {
+  Object.values(S.unsub).forEach(fn => { try { fn && fn(); } catch (e) {} });
+  S.unsub = {}; S.qid = null; S.q = null; S.myVote = undefined; S.results = null; S.stageSig = ''; S.mode = '';
+  $('stage').innerHTML = ''; $('resultsBox').innerHTML = ''; $('resultsBox').dataset.state = '';
+}
+
+function watchQuestion(qid) {
+  if (qid === S.qid) return;
+  ['q', 'vote'].forEach(k => { if (S.unsub[k]) { S.unsub[k](); delete S.unsub[k]; } });
+  S.qid = qid; S.q = null; S.myVote = undefined; S.selection = null; S.results = null;
+  if (!qid) return;
+  S.unsub.q = qRef().onSnapshot(s => { S.q = s.exists ? { id: s.id, ...s.data() } : null; render(); }, () => {});
+  S.unsub.vote = qRef().collection('votes').doc(S.uid).onSnapshot(s => {
+    S.myVote = s.exists ? s.data() : null;
+    if (s.exists) LS.set(votedKey(qid), '1');
+    render();
+  }, () => { S.myVote = null; render(); });
+}
+
+function watchResults() {
+  const want = S.meeting.resultVisibility === 'SHOW' && !!S.qid;
+  if (want && !S.unsub.results) {
+    S.unsub.results = resultsRef.onSnapshot(s => { S.results = s.data() || null; renderResults(); },
+      () => { delete S.unsub.results; S.results = null; renderResults(); });
+  } else if (!want && S.unsub.results) {
+    S.unsub.results(); delete S.unsub.results; S.results = null;
+  }
+}
+
+// =====================================================================
+//  Rendering
+// =====================================================================
+function currentMode() {
+  if (!S.qid) return 'wait';
+  if (!S.q) return 'loading';
+  const voted = S.myVote ? true : (S.myVote === undefined && LS.get(votedKey(S.qid)) === '1');
+  if (voted) return 'voted';
+  if (S.myVote === undefined) return 'loading';
+  if (S.meeting.votingStatus !== 'OPEN') return 'locked';
+  return 'vote';
+}
+
+function render() {
+  const mode = currentMode();
+  S.mode = mode;
+  const q = S.q;
+  const sig = [mode, S.qid, q ? JSON.stringify([q.text, q.type, q.options]) : '', mode === 'voted' ? JSON.stringify(S.myVote || {}) : ''].join('§');
+  if (sig !== S.stageSig) {
+    S.stageSig = sig;
+    $('resultsBox').dataset.state = '';
+    buildStage(mode);
+  }
+  renderResults();
+  renderCounter();
+}
+
+function questionHeader(q) {
+  const t = { mcq: 'Choose one option', rating: 'Rate from 1 to 5', wordcloud: 'Share a word or short phrase' }[q.type];
+  return `<div class="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-1">${t}</div>
+          <h2 class="text-xl font-extrabold text-navy leading-snug break-words">${esc(q.text)}</h2>`;
+}
+
+function buildStage(mode) {
+  const st = $('stage'), q = S.q;
+
+  if (mode === 'wait') {
+    st.innerHTML = `<div class="bg-white rounded-2xl shadow-sm p-8 text-center fade-in mt-6">
+      <div class="flex justify-center gap-2 mb-5"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="font-bold text-navy text-lg">You're in!</div>
+      <p class="text-slate-500 mt-1">Waiting for host to launch the next question...</p></div>`;
+    return;
+  }
+  if (mode === 'loading') {
+    st.innerHTML = `<div class="bg-white rounded-2xl shadow-sm p-8 flex justify-center"><div class="flex gap-2"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
+    return;
+  }
+  if (mode === 'locked') {
+    st.innerHTML = `<div class="bg-white rounded-2xl shadow-sm p-5 fade-in">${questionHeader(q)}
+      <div class="mt-4 rounded-xl bg-amber-50 text-amber-800 text-sm font-semibold p-3">🔒 Voting is closed for this question.</div></div>`;
+    return;
+  }
+  if (mode === 'voted') {
+    const v = S.myVote || {};
+    let ans = '';
+    if (q.type === 'mcq') ans = esc(((q.options || []).find(o => o.id === v.optionId) || {}).label || 'Your choice');
+    else if (q.type === 'rating') ans = v.rating ? `<span class="text-gold">${'★'.repeat(v.rating)}</span><span class="text-slate-300">${'★'.repeat(5 - v.rating)}</span> <span class="text-sm text-slate-500">${RATING_LABELS[v.rating - 1]}</span>` : 'Your rating';
+    else ans = '“' + esc(v.text || '') + '”';
+    st.innerHTML = `<div class="bg-white rounded-2xl shadow-sm p-5 fade-in">${questionHeader(q)}
+      <div class="mt-4 rounded-xl bg-emerald-50 border border-emerald-200 p-4 flex items-center gap-3">
+        <div class="check w-10 h-10 shrink-0 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xl font-bold">✓</div>
+        <div class="min-w-0"><div class="font-bold text-emerald-800">Vote Submitted</div><div class="text-navy font-semibold break-words">${ans}</div></div>
+      </div></div>`;
+    return;
+  }
+
+  // ---- mode === 'vote' ----
+  S.selection = null;
+  if (q.type === 'mcq') {
+    st.innerHTML = `<div class="bg-white rounded-2xl shadow-sm p-5 fade-in">${questionHeader(q)}
+      <div id="opts" class="mt-4 space-y-2.5">${(q.options || []).map(o => `
+        <button type="button" data-oid="${esc(o.id)}" class="opt w-full text-left rounded-xl border-2 border-slate-200 px-4 py-3.5 font-semibold text-navy flex items-center gap-3 transition active:scale-[.99]">
+          <span class="radio w-5 h-5 shrink-0 rounded-full border-2 border-slate-300 flex items-center justify-center"></span>
+          <span class="break-words">${esc(o.label)}</span></button>`).join('')}
+      </div>
+      <button id="submitBtn" disabled class="mt-5 w-full rounded-xl py-3.5 font-bold text-white bg-emerald-600 disabled:bg-slate-300 transition">Submit vote</button></div>`;
+    st.querySelectorAll('.opt').forEach(b => b.onclick = () => {
+      S.selection = b.dataset.oid;
+      st.querySelectorAll('.opt').forEach(x => {
+        const on = x === b;
+        x.classList.toggle('border-emerald-500', on); x.classList.toggle('bg-emerald-50', on); x.classList.toggle('border-slate-200', !on);
+        x.querySelector('.radio').innerHTML = on ? '<span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>' : '';
+        x.querySelector('.radio').classList.toggle('border-emerald-500', on);
+      });
+      $('submitBtn').disabled = false;
+    });
+    $('submitBtn').onclick = () => S.selection && submitVote({ optionId: S.selection }, $('submitBtn'));
+  }
+  else if (q.type === 'rating') {
+    st.innerHTML = `<div class="bg-white rounded-2xl shadow-sm p-5 fade-in">${questionHeader(q)}
+      <div class="mt-5 flex justify-between px-1">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-r="${i}" class="star text-slate-300" aria-label="${i} star">★</button>`).join('')}</div>
+      <div id="rLabel" class="text-center text-sm font-semibold text-slate-500 mt-2 h-5">Tap a star</div>
+      <button id="submitBtn" disabled class="mt-5 w-full rounded-xl py-3.5 font-bold text-white bg-emerald-600 disabled:bg-slate-300 transition">Submit rating</button></div>`;
+    st.querySelectorAll('.star').forEach(b => b.onclick = () => {
+      const r = +b.dataset.r; S.selection = r;
+      st.querySelectorAll('.star').forEach(x => { const on = +x.dataset.r <= r; x.classList.toggle('text-gold', on); x.classList.toggle('text-slate-300', !on); });
+      $('rLabel').textContent = RATING_LABELS[r - 1];
+      $('submitBtn').disabled = false;
+    });
+    $('submitBtn').onclick = () => S.selection && submitVote({ rating: S.selection }, $('submitBtn'));
+  }
+  else {
+    st.innerHTML = `<div class="bg-white rounded-2xl shadow-sm p-5 fade-in">${questionHeader(q)}
+      <form id="wcForm" class="mt-4">
+        <input id="wcInput" maxlength="40" autocomplete="off" placeholder="Type your answer…" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3.5 text-base focus:outline-none focus:border-emerald-500">
+        <div class="text-right text-xs text-slate-400 mt-1"><span id="wcCount">0</span>/40</div>
+        <button id="submitBtn" disabled class="mt-3 w-full rounded-xl py-3.5 font-bold text-white bg-emerald-600 disabled:bg-slate-300 transition">Submit</button>
+      </form></div>`;
+    const inp = $('wcInput');
+    inp.oninput = () => { $('wcCount').textContent = inp.value.length; $('submitBtn').disabled = !inp.value.trim(); };
+    $('wcForm').onsubmit = e => {
+      e.preventDefault();
+      const text = inp.value.trim().replace(/\s+/g, ' ').slice(0, 40);
+      if (text) submitVote({ text }, $('submitBtn'));
+    };
+  }
+}
+
+async function submitVote(payload, btn) {
+  if (S.submitting || !S.qid) return;
+  S.submitting = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+  const qid = S.qid;
+  try {
+    await mRef.collection('questions').doc(qid).collection('votes').doc(S.uid)
+      .set({ name: S.name, ...payload, ts: FV.serverTimestamp() });
+    LS.set(votedKey(qid), '1');
+    if (navigator.vibrate) navigator.vibrate(30);
+  } catch (err) {
+    console.error(err);
+    toast(S.meeting.votingStatus !== 'OPEN' ? 'Voting has just closed.' : 'Could not submit your vote. Please try again.');
+    if (btn && document.body.contains(btn)) { btn.disabled = false; btn.textContent = 'Submit'; }
+  } finally { S.submitting = false; }
+}
+
+// ---------------- Results ----------------
+function paintBars(el, rows) {
+  const hasKey = rows.some(r => r.correct);
+  const sig = rows.map(r => r.key + (r.correct ? '*' : '') + (r.mine ? '@' : '')).join('|');
+  const max = Math.max(0, ...rows.map(r => r.count));
+  if (el.dataset.sig !== sig) {
+    el.dataset.sig = sig;
+    el.innerHTML = `<div class="space-y-3">` + rows.map(r => `
+      <div data-k="${esc(r.key)}" class="${hasKey && !r.correct ? 'opacity-60' : ''}">
+        <div class="flex justify-between items-baseline text-sm mb-1 gap-2">
+          <span class="font-semibold break-words ${r.mine ? 'text-emerald-700' : 'text-navy'}">${r.correct ? '✅ ' : ''}${esc(r.label)}${r.mine ? ' <span class="text-xs">✓ you</span>' : ''}</span>
+          <span class="shrink-0 font-bold"><span class="cnt">0</span> <span class="pct text-slate-400 font-medium">(0%)</span></span>
+        </div>
+        <div class="h-3.5 bg-slate-100 rounded-full overflow-hidden"><div class="fill bar-fill h-full rounded-full" style="width:0%"></div></div>
+      </div>`).join('') + `</div>`;
+  }
+  const total = rows.reduce((a, r) => a + r.count, 0);
+  requestAnimationFrame(() => rows.forEach(r => {
+    const row = el.querySelector(`[data-k="${CSS.escape(String(r.key))}"]`); if (!row) return;
+    const pct = total ? Math.round((r.count / total) * 100) : 0;
+    const cnt = row.querySelector('.cnt');
+    if (cnt.textContent !== String(r.count)) { cnt.textContent = r.count; cnt.classList.remove('pop'); void cnt.offsetWidth; cnt.classList.add('pop'); }
+    row.querySelector('.pct').textContent = `(${pct}%)`;
+    const fill = row.querySelector('.fill');
+    fill.style.width = pct + '%';
+    fill.style.background = hasKey
+      ? (r.correct ? '#10B981' : '#94A3B8')
+      : ((r.count === max && max > 0) ? '#10B981' : '#1B3F73');
+  }));
+}
+
+function paintResults(el, q, agg) {
+  const v = S.myVote || {};
+  if (q.type === 'mcq') {
+    const key = agg.correctOptionId || null;
+    paintBars(el, (q.options || []).map(o => ({ key: o.id, label: o.label, count: (agg.counts || {})[o.id] || 0, mine: v.optionId === o.id, correct: !!key && key === o.id })));
+  } else if (q.type === 'rating') {
+    if (!el.querySelector('.avg-box')) {
+      el.innerHTML = `<div class="avg-box text-4xl font-extrabold text-gold mb-3">0.0 <span class="text-sm text-slate-400 font-semibold">average rating</span></div><div class="bars"></div>`;
+    }
+    el.querySelector('.avg-box').firstChild.nodeValue = (agg.avg || 0).toFixed(1) + ' ';
+    paintBars(el.querySelector('.bars'), [5, 4, 3, 2, 1].map(i => ({ key: 'r' + i, label: '★'.repeat(i), count: (agg.counts || {})[i] || 0, mine: v.rating === i })));
+  } else {
+    const words = agg.words || [];
+    if (!words.length) { el.innerHTML = '<p class="text-sm text-slate-400">No words yet…</p>'; return; }
+    const max = words[0].n, min = words[words.length - 1].n, colors = ['#0B1F3A', '#10B981', '#B88A0F', '#1B3F73', '#0EA5E9'];
+    el.innerHTML = `<div class="text-center">` + words.map((x, i) => {
+      const size = max === min ? 22 : 13 + ((x.n - min) / (max - min)) * 25;
+      return `<span class="word" style="font-size:${size.toFixed(0)}px;color:${colors[i % colors.length]}">${esc(x.w)}</span>`;
+    }).join('') + `</div>`;
+  }
+}
+
+function renderResults() {
+  const box = $('resultsBox'), mode = S.mode, m = S.meeting;
+  const setState = (state, html) => { if (box.dataset.state !== state) { box.dataset.state = state; box.innerHTML = html; } };
+
+  if (mode !== 'voted' && mode !== 'locked') return setState('none', '');
+  if (m.resultVisibility !== 'SHOW') {
+    return setState('hidden-' + mode, mode === 'voted'
+      ? `<div class="rounded-2xl bg-navy text-white p-5 text-center fade-in">
+           <div class="text-3xl mb-2">⏳</div>
+           <div class="font-bold">Votes recorded!</div>
+           <div class="text-slate-300 text-sm mt-1">Waiting for host to reveal results...</div></div>`
+      : '');
+  }
+  if (!S.results || S.results.questionId !== S.qid) {
+    return setState('loading', `<div class="bg-white rounded-2xl shadow-sm p-5 text-sm text-slate-400">Loading results…</div>`);
+  }
+  setState('show', `<div class="bg-white rounded-2xl shadow-sm p-5 fade-in">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-navy">Live results</h3>
+        <span class="text-xs font-bold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">● LIVE</span>
+      </div><div id="verdict"></div><div id="resInner"></div></div>`);
+
+  // Quiz verdict once the host reveals the correct answer
+  const key = S.q && S.q.type === 'mcq' ? S.results.correctOptionId : null;
+  const vEl = $('verdict');
+  let vHtml = '';
+  if (key) {
+    const label = ((S.q.options || []).find(o => o.id === key) || {}).label || '';
+    if (S.myVote && S.myVote.optionId === key) {
+      vHtml = `<div class="mb-4 rounded-xl bg-emerald-500 text-white p-3 font-bold text-center fade-in">🎉 Correct! Well done.</div>`;
+    } else if (S.myVote) {
+      vHtml = `<div class="mb-4 rounded-xl bg-red-50 text-red-700 border border-red-200 p-3 text-center fade-in"><b>❌ Not quite.</b><div class="text-sm mt-0.5">Correct answer: <b>${esc(label)}</b></div></div>`;
+    } else {
+      vHtml = `<div class="mb-4 rounded-xl bg-slate-50 text-slate-700 p-3 text-center text-sm fade-in">Correct answer: <b>${esc(label)}</b></div>`;
+    }
+  }
+  if (vEl.dataset.v !== vHtml) { vEl.dataset.v = vHtml; vEl.innerHTML = vHtml; }
+  paintResults($('resInner'), S.q, S.results);
+}
+
+function renderCounter() {
+  const bar = $('counterBar');
+  if (!S.qid) { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+  const st = S.meeting.stats || {}, joined = st.joined || 0, voted = st.voted || 0;
+  const pct = joined ? Math.min(100, Math.round((voted / joined) * 100)) : 0;
+  $('cVoted').textContent = voted; $('cJoined').textContent = joined;
+  $('cPct').textContent = pct + '%'; $('cProg').style.width = pct + '%';
+}
+</script>
+</body>
+</html>
